@@ -284,6 +284,12 @@ LSMessage::GetPingRsp ()
   return m_message.pingRsp;
 }
 
+
+
+
+
+
+
 // Hello
 
 uint32_t 
@@ -317,6 +323,26 @@ LSMessage::Hello::Deserialize (Buffer::Iterator &start)
   return Hello::GetSerializedSize ();
 }
 
+void
+LSMessage::SetHello ()
+{
+  if (m_messageType == 0)
+    {
+      m_messageType = HELLO;
+    }
+  else
+    {
+      NS_ASSERT (m_messageType == HELLO);
+    }
+  m_message.hello.msg = "hello";
+}
+
+LSMessage::Hello
+LSMessage::GetHello ()
+{
+  return m_message.hello;
+}
+
 // HelloRSP
 
 uint32_t 
@@ -348,6 +374,25 @@ LSMessage::HelloRSP::Deserialize (Buffer::Iterator &start)
   start.Read ((uint8_t*)str, length);
   msg = std::string (str, length);
   return HelloRSP::GetSerializedSize ();
+}
+void
+LSMessage::SetHelloRsp ()
+{
+  if (m_messageType == 0)
+    {
+      m_messageType = HELLO_RSP;
+    }
+  else
+    {
+      NS_ASSERT (m_messageType == HELLO_RSP);
+    }
+  m_message.helloRsp.msg = "helloRsp";
+}
+
+LSMessage::HelloRSP
+LSMessage::GetHelloRsp ()
+{
+  return m_message.helloRsp;
 }
 
 //

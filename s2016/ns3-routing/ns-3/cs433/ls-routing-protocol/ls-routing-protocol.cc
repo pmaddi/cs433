@@ -246,6 +246,21 @@ LSRoutingProtocol::BroadcastPacket (Ptr<Packet> packet)
 }
 
 void
+LSRoutingProtocol::SendPacket (Ptr<Packet> packet, Ipv4Address dest)
+{
+  for (std::map<Ptr<Socket> , Ipv4InterfaceAddress>::const_iterator i =
+      m_socketAddresses.begin (); i != m_socketAddresses.end (); i++)
+    {
+      Ipv4Address broadcastAddr = i->second.GetLocal ().GetSubnetDirectedBroadcast (i->second.GetMask ());
+      if (broadcastAddr == dest) {
+        i->first->SendTo (packet, 0, InetSocketAddress (broadcastAddr, m_lsPort));
+        return;
+      }
+    }
+  // exit(0);
+}
+
+void
 LSRoutingProtocol::ProcessCommand (std::vector<std::string> tokens)
 {
   std::vector<std::string>::iterator iterator = tokens.begin();
@@ -355,8 +370,7 @@ LSRoutingProtocol::RecvLSMessage (Ptr<Socket> socket)
         ProcessPingRsp (lsMessage);
         break;
       case LSMessage::HELLO:
-        // TODO: process hello message from neighbors (update neighbor table)
-        STATUS_LOG ("Hello from " << sourceAddress);
+        ProcessHello(lsMessage);
         break;
       case LSMessage::HELLO_RSP:
         // TODO: process hello message from neighbors (update neighbor table)
@@ -384,6 +398,24 @@ LSRoutingProtocol::ProcessPingReq (LSMessage lsMessage)
       packet->AddHeader (lsResp);
       BroadcastPacket (packet);
     }
+}
+
+
+void
+LSRoutingProtocol::ProcessHello (LSMessage lsMessage)
+{
+    // TODO add hello to tbl
+
+
+    // send hello rsp
+    std::string fromNode = ReverseLookup (lsMessage.GetOriginatorAddress ());
+    TRAFFIC_LOG ("Received HELLO, From Node: " << fromNode << ", Message: " << lsMessage.GetHello().msg);
+    LSMessage lsResp = LSMessage (LSMessage::HELLO_RSP, lsMessage.GetSequenceNumber(), m_maxTTL, m_mainAddress);
+    lsResp.SetHelloRsp ();
+    Ptr<Packet> packet = Create<Packet> ();
+    packet->AddHeader (lsResp);
+    SendPacket(packet, lsMessage.GetOriginatorAddress());
+    // BroadcastPacket (packet);
 }
 
 void

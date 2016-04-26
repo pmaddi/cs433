@@ -88,6 +88,7 @@ class LSRoutingProtocol : public CommRoutingProtocol
     void RecvLSMessage (Ptr<Socket> socket);
     void ProcessPingReq (LSMessage lsMessage);
     void ProcessPingRsp (LSMessage lsMessage);
+    void ProcessHello (LSMessage lsMessage);
 
     // Periodic Audit
     void AuditPings ();
@@ -187,6 +188,7 @@ class LSRoutingProtocol : public CommRoutingProtocol
      * \param packet Packet to be sent.
      */
     void BroadcastPacket (Ptr<Packet> packet);
+    void SendPacket (Ptr<Packet> packet, Ipv4Address dest);
     /**
      * \brief Returns the main IP address of a node in Inet topology.
      *

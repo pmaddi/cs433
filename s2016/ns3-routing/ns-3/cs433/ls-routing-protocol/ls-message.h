@@ -179,6 +179,12 @@ class LSMessage : public Header
      */
     void SetPingRsp (Ipv4Address destinationAddress, std::string message);
 
+
+    Hello GetHello ();
+    void SetHello ();
+    HelloRSP GetHelloRsp ();
+    void SetHelloRsp ();
+
 }; // class LSMessage
 
 static inline std::ostream& operator<< (std::ostream& os, const LSMessage& message)
