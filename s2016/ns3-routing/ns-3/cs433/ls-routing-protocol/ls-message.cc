@@ -71,6 +71,9 @@ LSMessage::GetSerializedSize (void) const
       case HELLO:
         size += m_message.hello.GetSerializedSize();
         break;
+      case HELLO_RSP:
+        size += m_message.helloRsp.GetSerializedSize();
+        break;
       default:
         NS_ASSERT (false);
     }
@@ -97,6 +100,10 @@ LSMessage::Print (std::ostream &os) const
         break;
       case HELLO:
         m_message.hello.Print (os);
+        break;
+      case HELLO_RSP:
+        m_message.helloRsp.Print (os);
+        break;
       default:
         break;  
     }
@@ -122,6 +129,9 @@ LSMessage::Serialize (Buffer::Iterator start) const
         break;
       case HELLO:
         m_message.hello.Serialize(i);
+        break;
+      case HELLO_RSP:
+        m_message.helloRsp.Serialize(i);
         break;
       default:
         NS_ASSERT (false);   
@@ -150,6 +160,9 @@ LSMessage::Deserialize (Buffer::Iterator start)
         break;
       case HELLO:
         m_message.hello.Deserialize(i);
+        break;
+      case HELLO_RSP:
+        m_message.helloRsp.Deserialize(i);
         break;
       default:
         NS_ASSERT (false);
@@ -271,6 +284,7 @@ LSMessage::GetPingRsp ()
   return m_message.pingRsp;
 }
 
+// Hello
 
 uint32_t 
 LSMessage::Hello::GetSerializedSize (void) const
@@ -303,6 +317,38 @@ LSMessage::Hello::Deserialize (Buffer::Iterator &start)
   return Hello::GetSerializedSize ();
 }
 
+// HelloRSP
+
+uint32_t 
+LSMessage::HelloRSP::GetSerializedSize (void) const
+{
+  uint32_t size;
+  size = sizeof(uint16_t) + msg.length();
+  return size;
+}
+
+void
+LSMessage::HelloRSP::Print (std::ostream &os) const
+{
+  os << "HelloRSP:: Message: " << msg << "\n";
+}
+
+void
+LSMessage::HelloRSP::Serialize (Buffer::Iterator &start) const
+{
+  start.WriteU16 (msg.length ());
+  start.Write ((uint8_t *) (const_cast<char*> (msg.c_str())), msg.length());
+}
+
+uint32_t
+LSMessage::HelloRSP::Deserialize (Buffer::Iterator &start)
+{  
+  uint16_t length = start.ReadU16 ();
+  char* str = (char*) malloc (length);
+  start.Read ((uint8_t*)str, length);
+  msg = std::string (str, length);
+  return HelloRSP::GetSerializedSize ();
+}
 
 //
 //

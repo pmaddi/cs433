@@ -358,6 +358,10 @@ LSRoutingProtocol::RecvLSMessage (Ptr<Socket> socket)
         // TODO: process hello message from neighbors (update neighbor table)
         STATUS_LOG ("Hello from " << sourceAddress);
         break;
+      case LSMessage::HELLO_RSP:
+        // TODO: process hello message from neighbors (update neighbor table)
+        STATUS_LOG ("Hello from " << sourceAddress);
+        break;
       default:
         ERROR_LOG ("Unknown Message Type!");
         break;

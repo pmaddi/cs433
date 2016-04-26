@@ -37,8 +37,8 @@ class LSMessage : public Header
       {
         PING_REQ = 1,
         PING_RSP = 2,
-        // Define extra message types when needed       
         HELLO = 3,
+        HELLO_RSP = 4,
       };
 
     LSMessage (LSMessage::MessageType messageType, uint32_t sequenceNumber, uint8_t ttl, Ipv4Address originatorAddress);
@@ -137,6 +137,15 @@ class LSMessage : public Header
         // Payload
         std::string msg = "hey";
     };
+    
+    struct HelloRSP {
+        void Print (std::ostream &os) const;
+        uint32_t GetSerializedSize (void) const;
+        void Serialize (Buffer::Iterator &start) const;
+        uint32_t Deserialize (Buffer::Iterator &start);
+        // Payload
+        std::string msg = "heyrsp";
+    };
 
   private:
     struct
@@ -144,6 +153,7 @@ class LSMessage : public Header
         PingReq pingReq;
         PingRsp pingRsp;
         Hello hello;
+        HelloRSP helloRsp;
       } m_message;
     
   public:
