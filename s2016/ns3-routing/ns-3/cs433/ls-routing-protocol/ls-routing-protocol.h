@@ -203,6 +203,9 @@ class LSRoutingProtocol : public CommRoutingProtocol
      * \param ipv4Address IP address of node.
      */
 
+
+     void SayHelloToNeighbors();
+
     virtual std::string ReverseLookup (Ipv4Address ipv4Address); 
     
     // Status 
@@ -227,6 +230,9 @@ class LSRoutingProtocol : public CommRoutingProtocol
     Ptr<Ipv4StaticRouting> m_staticRouting;
     Ptr<Ipv4> m_ipv4;
     Time m_pingTimeout;
+
+    Time m_helloTimeout;
+
     uint8_t m_maxTTL;
     uint16_t m_lsPort;
     uint32_t m_currentSequenceNumber;
@@ -234,6 +240,9 @@ class LSRoutingProtocol : public CommRoutingProtocol
     std::map<Ipv4Address, uint32_t> m_addressNodeMap;
     // Timers
     Timer m_auditPingsTimer;
+
+    Timer m_sayHelloTimer;
+
     // Ping tracker
     std::map<uint32_t, Ptr<PingRequest> > m_pingTracker;
 };
