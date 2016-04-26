@@ -54,12 +54,17 @@ LSRoutingProtocol::GetTypeId (void)
                  UintegerValue (16),
                  MakeUintegerAccessor (&LSRoutingProtocol::m_maxTTL),
                  MakeUintegerChecker<uint8_t> ())
+  .AddAttribute ("HelloTimeout",
+                 "Timeout value for HELLO in milliseconds",
+                 TimeValue(MilliSeconds (4000)),
+                 MakeTimeAccessor (&LSRoutingProtocol::m_helloTimeout),
+                 MakeTimeChecker ())
   ;
   return tid;
 }
 
 LSRoutingProtocol::LSRoutingProtocol ()
-  : m_auditPingsTimer (Timer::CANCEL_ON_DESTROY)
+  : m_auditPingsTimer (Timer::CANCEL_ON_DESTROY), m_sayHelloTimer(Timer::CANCEL_ON_DESTROY)
 {
   RandomVariable random;
   SeedManager::SetSeed (time (NULL));
@@ -89,6 +94,7 @@ LSRoutingProtocol::DoDispose ()
 
   // Cancel timers
   m_auditPingsTimer.Cancel ();
+  m_sayHelloTimer.Cancel();
  
   m_pingTracker.clear (); 
 
@@ -141,6 +147,9 @@ LSRoutingProtocol::ReverseLookup (Ipv4Address ipAddress)
 void
 LSRoutingProtocol::DoStart ()
 {
+
+  STATUS_LOG("in DoStart()");
+
   // Create sockets
   for (uint32_t i = 0 ; i < m_ipv4->GetNInterfaces () ; i++)
     {
@@ -163,9 +172,11 @@ LSRoutingProtocol::DoStart ()
     }
   // Configure timers
   m_auditPingsTimer.SetFunction (&LSRoutingProtocol::AuditPings, this);
+  m_sayHelloTimer.SetFunction(&LSRoutingProtocol::SayHelloToNeighbors, this);
 
   // Start timers
   m_auditPingsTimer.Schedule (m_pingTimeout);
+  m_sayHelloTimer.Schedule();
 
 }
 
@@ -343,6 +354,10 @@ LSRoutingProtocol::RecvLSMessage (Ptr<Socket> socket)
       case LSMessage::PING_RSP:
         ProcessPingRsp (lsMessage);
         break;
+      case LSMessage::HELLO:
+        // TODO: process hello message from neighbors (update neighbor table)
+        STATUS_LOG ("Hello from " << sourceAddress);
+        break;
       default:
         ERROR_LOG ("Unknown Message Type!");
         break;
@@ -425,6 +440,17 @@ LSRoutingProtocol::AuditPings ()
     }
   // Rechedule timer
   m_auditPingsTimer.Schedule (m_pingTimeout); 
+}
+
+void 
+LSRoutingProtocol::SayHelloToNeighbors() {
+  Ptr<Packet> packet = Create<Packet> ();
+  LSMessage lsMessage = LSMessage (LSMessage::HELLO, 0, 1, m_mainAddress);
+  // lsMessage.SetHello (destAddress, pingMessage);
+  packet->AddHeader (lsMessage);
+  BroadcastPacket (packet);
+
+  m_sayHelloTimer.Schedule(m_helloTimeout);
 }
 
 uint32_t

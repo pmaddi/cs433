@@ -68,6 +68,9 @@ LSMessage::GetSerializedSize (void) const
       case PING_RSP:
         size += m_message.pingRsp.GetSerializedSize ();
         break;
+      case HELLO:
+        size += m_message.hello.GetSerializedSize();
+        break;
       default:
         NS_ASSERT (false);
     }
@@ -92,6 +95,8 @@ LSMessage::Print (std::ostream &os) const
       case PING_RSP:
         m_message.pingRsp.Print (os);
         break;
+      case HELLO:
+        m_message.hello.Print (os);
       default:
         break;  
     }
@@ -114,6 +119,9 @@ LSMessage::Serialize (Buffer::Iterator start) const
         break;
       case PING_RSP:
         m_message.pingRsp.Serialize (i);
+        break;
+      case HELLO:
+        m_message.hello.Serialize(i);
         break;
       default:
         NS_ASSERT (false);   
@@ -139,6 +147,9 @@ LSMessage::Deserialize (Buffer::Iterator start)
         break;
       case PING_RSP:
         size += m_message.pingRsp.Deserialize (i);
+        break;
+      case HELLO:
+        m_message.hello.Deserialize(i);
         break;
       default:
         NS_ASSERT (false);
@@ -258,6 +269,38 @@ LSMessage::PingRsp
 LSMessage::GetPingRsp ()
 {
   return m_message.pingRsp;
+}
+
+
+uint32_t 
+LSMessage::Hello::GetSerializedSize (void) const
+{
+  uint32_t size;
+  size = sizeof(uint16_t) + msg.length();
+  return size;
+}
+
+void
+LSMessage::Hello::Print (std::ostream &os) const
+{
+  os << "Hello:: Message: " << msg << "\n";
+}
+
+void
+LSMessage::Hello::Serialize (Buffer::Iterator &start) const
+{
+  start.WriteU16 (msg.length ());
+  start.Write ((uint8_t *) (const_cast<char*> (msg.c_str())), msg.length());
+}
+
+uint32_t
+LSMessage::Hello::Deserialize (Buffer::Iterator &start)
+{  
+  uint16_t length = start.ReadU16 ();
+  char* str = (char*) malloc (length);
+  start.Read ((uint8_t*)str, length);
+  msg = std::string (str, length);
+  return Hello::GetSerializedSize ();
 }
 
 
