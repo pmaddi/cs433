@@ -68,6 +68,12 @@ DVMessage::GetSerializedSize (void) const
       case PING_RSP:
         size += m_message.pingRsp.GetSerializedSize ();
         break;
+      case HELLO:
+        size += m_message.hello.GetSerializedSize();
+        break;
+      case HELLO_RSP:
+        size += m_message.helloRsp.GetSerializedSize();
+        break;
       default:
         NS_ASSERT (false);
     }
@@ -92,6 +98,12 @@ DVMessage::Print (std::ostream &os) const
       case PING_RSP:
         m_message.pingRsp.Print (os);
         break;
+      case HELLO:
+        m_message.hello.Print (os);
+        break;
+      case HELLO_RSP:
+        m_message.helloRsp.Print (os);
+        break;
       default:
         break;  
     }
@@ -114,6 +126,12 @@ DVMessage::Serialize (Buffer::Iterator start) const
         break;
       case PING_RSP:
         m_message.pingRsp.Serialize (i);
+        break;
+      case HELLO:
+        m_message.hello.Serialize(i);
+        break;
+      case HELLO_RSP:
+        m_message.helloRsp.Serialize(i);
         break;
       default:
         NS_ASSERT (false);   
@@ -139,6 +157,12 @@ DVMessage::Deserialize (Buffer::Iterator start)
         break;
       case PING_RSP:
         size += m_message.pingRsp.Deserialize (i);
+        break;
+      case HELLO:
+        m_message.hello.Deserialize(i);
+        break;
+      case HELLO_RSP:
+        m_message.helloRsp.Deserialize(i);
         break;
       default:
         NS_ASSERT (false);
@@ -260,6 +284,111 @@ DVMessage::GetPingRsp ()
   return m_message.pingRsp;
 }
 
+
+// Hello
+
+uint32_t 
+DVMessage::Hello::GetSerializedSize (void) const
+{
+  uint32_t size;
+  size = sizeof(uint16_t) + msg.length();
+  return size;
+}
+
+void
+DVMessage::Hello::Print (std::ostream &os) const
+{
+  os << "Hello:: Message: " << msg << "\n";
+}
+
+void
+DVMessage::Hello::Serialize (Buffer::Iterator &start) const
+{
+  start.WriteU16 (msg.length ());
+  start.Write ((uint8_t *) (const_cast<char*> (msg.c_str())), msg.length());
+}
+
+uint32_t
+DVMessage::Hello::Deserialize (Buffer::Iterator &start)
+{  
+  uint16_t length = start.ReadU16 ();
+  char* str = (char*) malloc (length);
+  start.Read ((uint8_t*)str, length);
+  msg = std::string (str, length);
+  return Hello::GetSerializedSize ();
+}
+
+void
+DVMessage::SetHello ()
+{
+  if (m_messageType == 0)
+    {
+      m_messageType = HELLO;
+    }
+  else
+    {
+      NS_ASSERT (m_messageType == HELLO);
+    }
+  m_message.hello.msg = "hello";
+}
+
+DVMessage::Hello
+DVMessage::GetHello ()
+{
+  return m_message.hello;
+}
+
+// HelloRSP
+
+uint32_t 
+DVMessage::HelloRSP::GetSerializedSize (void) const
+{
+  uint32_t size;
+  size = sizeof(uint16_t) + msg.length();
+  return size;
+}
+
+void
+DVMessage::HelloRSP::Print (std::ostream &os) const
+{
+  os << "HelloRSP:: Message: " << msg << "\n";
+}
+
+void
+DVMessage::HelloRSP::Serialize (Buffer::Iterator &start) const
+{
+  start.WriteU16 (msg.length ());
+  start.Write ((uint8_t *) (const_cast<char*> (msg.c_str())), msg.length());
+}
+
+uint32_t
+DVMessage::HelloRSP::Deserialize (Buffer::Iterator &start)
+{  
+  uint16_t length = start.ReadU16 ();
+  char* str = (char*) malloc (length);
+  start.Read ((uint8_t*)str, length);
+  msg = std::string (str, length);
+  return HelloRSP::GetSerializedSize ();
+}
+void
+DVMessage::SetHelloRsp ()
+{
+  if (m_messageType == 0)
+    {
+      m_messageType = HELLO_RSP;
+    }
+  else
+    {
+      NS_ASSERT (m_messageType == HELLO_RSP);
+    }
+  m_message.helloRsp.msg = "helloRsp";
+}
+
+DVMessage::HelloRSP
+DVMessage::GetHelloRsp ()
+{
+  return m_message.helloRsp;
+}
 
 //
 //

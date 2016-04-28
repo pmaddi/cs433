@@ -361,6 +361,7 @@ LSRoutingProtocol::DumpRoutingTable ()
 	*/
 	//checkRouteTableEntry();
 }
+
 void
 LSRoutingProtocol::RecvLSMessage (Ptr<Socket> socket)
 {
@@ -408,7 +409,6 @@ LSRoutingProtocol::ProcessPingReq (LSMessage lsMessage)
       BroadcastPacket (packet);
     }
 }
-
 
 void
 LSRoutingProtocol::ProcessHello (LSMessage lsMessage, Ipv4Address sourceAddress)

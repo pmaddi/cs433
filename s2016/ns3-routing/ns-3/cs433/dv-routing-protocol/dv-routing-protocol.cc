@@ -54,6 +54,11 @@ DVRoutingProtocol::GetTypeId (void)
                  UintegerValue (16),
                  MakeUintegerAccessor (&DVRoutingProtocol::m_maxTTL),
                  MakeUintegerChecker<uint8_t> ())
+  .AddAttribute ("HelloTimeout",
+                 "Timeout value for HELLO in milliseconds",
+                 TimeValue(MilliSeconds (20000)),
+                 MakeTimeAccessor (&DVRoutingProtocol::m_helloTimeout),
+                 MakeTimeChecker ())
   ;
   return tid;
 }
@@ -89,6 +94,7 @@ DVRoutingProtocol::DoDispose ()
 
   // Cancel timers
   m_auditPingsTimer.Cancel ();
+  m_sayHelloTimer.Cancel();
  
   m_pingTracker.clear (); 
 
@@ -124,6 +130,18 @@ DVRoutingProtocol::ResolveNodeIpAddress (uint32_t nodeNumber)
   return Ipv4Address::GetAny ();
 }
 
+uint32_t
+DVRoutingProtocol::ReverseLookupInt (Ipv4Address ipAddress)
+{
+  std::map<Ipv4Address, uint32_t>::iterator iter = m_addressNodeMap.find (ipAddress);
+  if (iter != m_addressNodeMap.end ())
+    {
+      uint32_t nodeNumber = iter->second;
+      return nodeNumber;
+    }
+  return 0;
+}
+
 std::string
 DVRoutingProtocol::ReverseLookup (Ipv4Address ipAddress)
 {
@@ -141,6 +159,9 @@ DVRoutingProtocol::ReverseLookup (Ipv4Address ipAddress)
 void
 DVRoutingProtocol::DoStart ()
 {
+
+  STATUS_LOG("in DoStart()");
+
   // Create sockets
   for (uint32_t i = 0 ; i < m_ipv4->GetNInterfaces () ; i++)
     {
@@ -161,11 +182,16 @@ DVRoutingProtocol::DoStart ()
       socket->BindToNetDevice (netDevice);
       m_socketAddresses[socket] = m_ipv4->GetAddress (i, 0);
     }
+  m_neighbors.reserve(10);
+  m_helloTracker.reserve(10);
+
   // Configure timers
   m_auditPingsTimer.SetFunction (&DVRoutingProtocol::AuditPings, this);
+  m_sayHelloTimer.SetFunction(&DVRoutingProtocol::SayHelloToNeighbors, this);
 
   // Start timers
   m_auditPingsTimer.Schedule (m_pingTimeout);
+  m_sayHelloTimer.Schedule(m_helloTimeout);
 
 }
 
@@ -235,6 +261,12 @@ DVRoutingProtocol::BroadcastPacket (Ptr<Packet> packet)
 }
 
 void
+DVRoutingProtocol::SendPacket (Ptr<Packet> packet, Ipv4Address dest)
+{
+  m_socketAddresses.begin()->first->SendTo (packet, 0, InetSocketAddress (dest, m_dvPort));
+}
+
+void
 DVRoutingProtocol::ProcessCommand (std::vector<std::string> tokens)
 {
   std::vector<std::string>::iterator iterator = tokens.begin();
@@ -284,7 +316,19 @@ DVRoutingProtocol::ProcessCommand (std::vector<std::string> tokens)
         {
           DumpNeighbors ();
         }
+      else if (table == "DVA")
+        {
+          DumpDVA ();
+        }
     }
+}
+
+void
+DVRoutingProtocol::DumpDVA ()
+{
+  STATUS_LOG (std::endl << "**************** DVA DUMP ********************" << std::endl
+              << "Node\t\tNeighbor(s)");
+  PRINT_LOG ("");
 }
 
 void
@@ -292,7 +336,11 @@ DVRoutingProtocol::DumpNeighbors ()
 {
   STATUS_LOG (std::endl << "**************** Neighbor List ********************" << std::endl
               << "NeighborNumber\t\tNeighborAddr\t\tInterfaceAddr");
-  PRINT_LOG ("");
+  for(int i=0; i<m_neighbors.size(); i++)
+  {
+    uint32_t node = m_neighbors[i];
+    PRINT_LOG(""<<node<<"\t\t\t"<<ResolveNodeIpAddress(node)<<"\t\t"<<m_socketAddresses.begin()->second.GetLocal());
+  }
 
   /*NOTE: For purpose of autograding, you should invoke the following function for each
   neighbor table entry. The output format is indicated by parameter name and type.
@@ -332,6 +380,12 @@ DVRoutingProtocol::RecvDVMessage (Ptr<Socket> socket)
       case DVMessage::PING_RSP:
         ProcessPingRsp (dvMessage);
         break;
+      case DVMessage::HELLO:
+        ProcessHello(dvMessage, sourceAddress);
+        break;
+      case DVMessage::HELLO_RSP:
+        ProcessHelloRsp(ReverseLookupInt(dvMessage.GetOriginatorAddress ()));
+        break;
       default:
         ERROR_LOG ("Unknown Message Type!");
         break;
@@ -354,6 +408,29 @@ DVRoutingProtocol::ProcessPingReq (DVMessage dvMessage)
       packet->AddHeader (dvResp);
       BroadcastPacket (packet);
     }
+}
+
+void
+DVRoutingProtocol::ProcessHello (DVMessage dvMessage, Ipv4Address sourceAddress)
+{
+    // TODO add hello to tbl
+
+    DVMessage dvResp = DVMessage (DVMessage::HELLO_RSP, dvMessage.GetSequenceNumber(), 1, m_mainAddress);
+    dvResp.SetHelloRsp();
+    Ptr<Packet> packet = Create<Packet> ();
+    packet->AddHeader (dvResp);
+    SendPacket(packet, sourceAddress);
+}
+
+void
+DVRoutingProtocol::ProcessHelloRsp (uint32_t node)
+{
+  if(std::find(m_neighbors.begin(), m_neighbors.end(), node) != m_neighbors.end()) {
+    m_helloTracker.erase(std::remove(m_helloTracker.begin(), m_helloTracker.end(), node), m_helloTracker.end());
+  } else {
+    m_neighbors.push_back(node);
+    STATUS_LOG("New Neighbor: "<<node);
+  }
 }
 
 void
@@ -414,6 +491,26 @@ DVRoutingProtocol::AuditPings ()
     }
   // Rechedule timer
   m_auditPingsTimer.Schedule (m_pingTimeout); 
+}
+
+void
+DVRoutingProtocol::SayHelloToNeighbors() {
+  for(int i=0; i<m_helloTracker.size(); i++)
+  {
+    m_neighbors.erase(std::remove(m_neighbors.begin(), m_neighbors.end(), m_helloTracker[i]), m_neighbors.end());
+    m_helloTracker.clear();
+  }
+  for(int i=0; i<m_neighbors.size(); i++)
+  {
+    m_helloTracker.push_back(m_neighbors[i]);
+  }
+
+  Ptr<Packet> packet = Create<Packet> ();
+  DVMessage dvMessage = DVMessage (DVMessage::HELLO, 0, 1, m_mainAddress);
+  packet->AddHeader (dvMessage);
+  BroadcastPacket (packet);
+
+  m_sayHelloTimer.Schedule(m_helloTimeout);
 }
 
 uint32_t
