@@ -43,29 +43,29 @@ InetSocketAddress::InetSocketAddress (uint16_t port)
   : m_ipv4 (Ipv4Address::GetAny ()),
     m_port (port)
 {}
-uint16_t 
+uint16_t
 InetSocketAddress::GetPort (void) const
 {
   return m_port;
 }
-Ipv4Address 
+Ipv4Address
 InetSocketAddress::GetIpv4 (void) const
 {
   return m_ipv4;
 }
 
-void 
+void
 InetSocketAddress::SetPort (uint16_t port)
 {
   m_port = port;
 }
-void 
+void
 InetSocketAddress::SetIpv4 (Ipv4Address address)
 {
   m_ipv4 = address;
 }
 
-bool 
+bool
 InetSocketAddress::IsMatchingType (const Address &address)
 {
   return address.CheckCompatible (GetType (), 6);
@@ -76,7 +76,7 @@ InetSocketAddress::operator Address () const
   return ConvertTo ();
 }
 
-Address 
+Address
 InetSocketAddress::ConvertTo (void) const
 {
   uint8_t buf[6];
@@ -85,7 +85,7 @@ InetSocketAddress::ConvertTo (void) const
   buf[5] = (m_port >> 8) & 0xff;
   return Address (GetType (), buf, 6);
 }
-InetSocketAddress 
+InetSocketAddress
 InetSocketAddress::ConvertFrom (const Address &address)
 {
   NS_ASSERT (address.CheckCompatible (GetType (), 6));
@@ -95,7 +95,7 @@ InetSocketAddress::ConvertFrom (const Address &address)
   uint16_t port = buf[4] | (buf[5] << 8);
   return InetSocketAddress (ipv4, port);
 }
-uint8_t 
+uint8_t
 InetSocketAddress::GetType (void)
 {
   static uint8_t type = Address::Register ();
