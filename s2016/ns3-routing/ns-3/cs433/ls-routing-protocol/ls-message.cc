@@ -38,7 +38,7 @@ LSMessage::LSMessage (LSMessage::MessageType messageType, uint32_t sequenceNumbe
   m_originatorAddress = originatorAddress;
 }
 
-TypeId 
+TypeId
 LSMessage::GetTypeId (void)
 {
   static TypeId tid = TypeId ("LSMessage")
@@ -74,6 +74,9 @@ LSMessage::GetSerializedSize (void) const
       case HELLO_RSP:
         size += m_message.helloRsp.GetSerializedSize();
         break;
+      case LS_UPDATE:
+        size += m_message.lsUpdate.GetSerializedSize();
+        break;
       default:
         NS_ASSERT (false);
     }
@@ -89,7 +92,7 @@ LSMessage::Print (std::ostream &os) const
   os << "ttl: " << m_ttl << "\n";
   os << "originatorAddress: " << m_originatorAddress << "\n";
   os << "PAYLOAD:: \n";
-  
+
   switch (m_messageType)
     {
       case PING_REQ:
@@ -104,8 +107,11 @@ LSMessage::Print (std::ostream &os) const
       case HELLO_RSP:
         m_message.helloRsp.Print (os);
         break;
+      case LS_UPDATE:
+        m_message.lsUpdate.Print (os);
+        break;
       default:
-        break;  
+        break;
     }
   os << "\n****END OF MESSAGE****\n";
 }
@@ -133,12 +139,15 @@ LSMessage::Serialize (Buffer::Iterator start) const
       case HELLO_RSP:
         m_message.helloRsp.Serialize(i);
         break;
+      case LS_UPDATE:
+        m_message.lsUpdate.Serialize(i);
+        break;
       default:
-        NS_ASSERT (false);   
+        NS_ASSERT (false);
     }
 }
 
-uint32_t 
+uint32_t
 LSMessage::Deserialize (Buffer::Iterator start)
 {
   uint32_t size;
@@ -164,6 +173,9 @@ LSMessage::Deserialize (Buffer::Iterator start)
       case HELLO_RSP:
         m_message.helloRsp.Deserialize(i);
         break;
+      case LS_UPDATE:
+        m_message.lsUpdate.Deserialize(i);
+        break;
       default:
         NS_ASSERT (false);
     }
@@ -172,7 +184,7 @@ LSMessage::Deserialize (Buffer::Iterator start)
 
 /* PING_REQ */
 
-uint32_t 
+uint32_t
 LSMessage::PingReq::GetSerializedSize (void) const
 {
   uint32_t size;
@@ -196,7 +208,7 @@ LSMessage::PingReq::Serialize (Buffer::Iterator &start) const
 
 uint32_t
 LSMessage::PingReq::Deserialize (Buffer::Iterator &start)
-{  
+{
   destinationAddress = Ipv4Address (start.ReadNtohU32 ());
   uint16_t length = start.ReadU16 ();
   char* str = (char*) malloc (length);
@@ -229,7 +241,7 @@ LSMessage::GetPingReq ()
 
 /* PING_RSP */
 
-uint32_t 
+uint32_t
 LSMessage::PingRsp::GetSerializedSize (void) const
 {
   uint32_t size;
@@ -253,7 +265,7 @@ LSMessage::PingRsp::Serialize (Buffer::Iterator &start) const
 
 uint32_t
 LSMessage::PingRsp::Deserialize (Buffer::Iterator &start)
-{  
+{
   destinationAddress = Ipv4Address (start.ReadNtohU32 ());
   uint16_t length = start.ReadU16 ();
   char* str = (char*) malloc (length);
@@ -292,7 +304,7 @@ LSMessage::GetPingRsp ()
 
 // Hello
 
-uint32_t 
+uint32_t
 LSMessage::Hello::GetSerializedSize (void) const
 {
   uint32_t size;
@@ -315,7 +327,7 @@ LSMessage::Hello::Serialize (Buffer::Iterator &start) const
 
 uint32_t
 LSMessage::Hello::Deserialize (Buffer::Iterator &start)
-{  
+{
   uint16_t length = start.ReadU16 ();
   char* str = (char*) malloc (length);
   start.Read ((uint8_t*)str, length);
@@ -345,7 +357,7 @@ LSMessage::GetHello ()
 
 // HelloRSP
 
-uint32_t 
+uint32_t
 LSMessage::HelloRSP::GetSerializedSize (void) const
 {
   uint32_t size;
@@ -368,7 +380,7 @@ LSMessage::HelloRSP::Serialize (Buffer::Iterator &start) const
 
 uint32_t
 LSMessage::HelloRSP::Deserialize (Buffer::Iterator &start)
-{  
+{
   uint16_t length = start.ReadU16 ();
   char* str = (char*) malloc (length);
   start.Read ((uint8_t*)str, length);
@@ -376,7 +388,7 @@ LSMessage::HelloRSP::Deserialize (Buffer::Iterator &start)
   return HelloRSP::GetSerializedSize ();
 }
 void
-LSMessage::SetHelloRsp ()
+LSMessage::SetHelloRsp()
 {
   if (m_messageType == 0)
     {
@@ -398,6 +410,52 @@ LSMessage::GetHelloRsp ()
 //
 //
 //
+//LS Update
+uint32_t
+LSMessage::LSUpdate::GetSerializedSize (void) const
+{
+  uint32_t size;
+  size = 3*sizeof(uint32_t);
+  return size;
+}
+
+void
+LSMessage::LSUpdate::Print (std::ostream &os) const
+{
+  os << "LSUpdate:: Edge: " << node1 << " to "<<node2<< "\n";
+}
+
+void
+LSMessage::LSUpdate::Serialize (Buffer::Iterator &start) const
+{
+  start.WriteU32(node1);
+  start.WriteU32(node2);
+  start.WriteU32(seq);
+}
+
+uint32_t
+LSMessage::LSUpdate::Deserialize (Buffer::Iterator &start)
+{
+  node1 = start.ReadU32();
+  node2 = start.ReadU32();
+  seq = start.ReadU32();
+  return LSUpdate::GetSerializedSize ();
+}
+void
+LSMessage::SetLSUpdateRsp (uint32_t node1, uint32_t node2, uint32_t seq)
+{
+  m_message.lsUpdate.node1 = node1;
+  m_message.lsUpdate.node2 = node2;
+  m_message.lsUpdate.seq = seq;
+}
+
+LSMessage::LSUpdate
+LSMessage::GetLSUpdate ()
+{
+  return m_message.lsUpdate;
+}
+//
+//
 
 void
 LSMessage::SetMessageType (MessageType messageType)
@@ -417,7 +475,7 @@ LSMessage::SetSequenceNumber (uint32_t sequenceNumber)
   m_sequenceNumber = sequenceNumber;
 }
 
-uint32_t 
+uint32_t
 LSMessage::GetSequenceNumber (void) const
 {
   return m_sequenceNumber;
@@ -429,7 +487,7 @@ LSMessage::SetTTL (uint8_t ttl)
   m_ttl = ttl;
 }
 
-uint8_t 
+uint8_t
 LSMessage::GetTTL (void) const
 {
   return m_ttl;

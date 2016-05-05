@@ -32,6 +32,7 @@
 
 #include <vector>
 #include <map>
+#include <set>
 
 using namespace ns3;
 
@@ -89,8 +90,10 @@ class LSRoutingProtocol : public CommRoutingProtocol
     void ProcessPingReq (LSMessage lsMessage);
     void ProcessPingRsp (LSMessage lsMessage);
     void ProcessHello (LSMessage lsMessage, Ipv4Address sourceAddress);
-    void ProcessHelloRsp (uint32_t node);
-    void ProcessLSUpdate (LSMessage lsMessage);
+    void ProcessHelloRsp (uint32_t node, Ipv4Address sourceAddress);
+    void ProcessLSUpdate (LSMessage lsMessage, uint32_t node);
+
+    void GlobalRoute();
 
     // Periodic Audit
     void AuditPings ();
@@ -209,6 +212,7 @@ class LSRoutingProtocol : public CommRoutingProtocol
 
 
      void SayHelloToNeighbors();
+     void SendLSUpdates();
 
     virtual std::string ReverseLookup (Ipv4Address ipv4Address);
     virtual uint32_t ReverseLookupInt (Ipv4Address ipv4Address);
@@ -235,6 +239,11 @@ class LSRoutingProtocol : public CommRoutingProtocol
       uint32_t node1;
       uint32_t node2;
       uint32_t seq;
+    };
+
+    struct LsUpdateMessage{
+      Edge edge;
+      uint32_t dest;
     } ;
 
     std::map< Ptr<Socket>, Ipv4InterfaceAddress > m_socketAddresses;
@@ -253,6 +262,7 @@ class LSRoutingProtocol : public CommRoutingProtocol
     std::map<Ipv4Address, uint32_t> m_addressNodeMap;
 
     std::vector<uint32_t> m_neighbors;
+    std::map<uint32_t, Ipv4Address> m_neighborsIP;
     std::vector<uint32_t> m_helloTracker;
     std::vector<Edge>  m_edges;
 
