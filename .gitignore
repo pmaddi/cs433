@@ -2,7 +2,8 @@
 *.lock-wscript
 
 *.waf*
-*/build/*
+s2016/ns3-routing/ns-3/build/
+build/
 
 # Compiled source #
 ###################

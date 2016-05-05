@@ -27,7 +27,7 @@
 #include "ns3/uinteger.h"
 #include "ns3/test-result.h"
 #include <sys/time.h>
-
+#include <stdint.h>
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("LSRoutingProtocol");
@@ -545,4 +545,68 @@ LSRoutingProtocol::SetIpv4 (Ptr<Ipv4> ipv4)
 {
   m_ipv4 = ipv4;
   m_staticRouting->SetIpv4 (m_ipv4);
+}
+
+void
+LSRoutingProtocol::GlobalRoute ()
+{
+  // init
+
+  std::set<uint32_t> updated_nodes;
+  updated_nodes.insert(m_node);
+
+  int node_count = 0;
+
+  std::map<uint32_t, uint32_t> distance_map;
+  std::map<uint32_t, uint32_t> next_hop;
+
+  for (std::map<uint32_t, Ipv4Address>::iterator it=m_nodeAddressMap.begin(); it!=m_nodeAddressMap.end(); ++it) {
+    // for i in nodes
+    node_count += 1;
+    int found = 0;
+    for (std::vector<Edge>::iterator edge=m_edges.begin(); edge!=m_edges.end(); ++edge) {
+      if (found) {
+        found = 1;
+      } 
+    }
+    if (found) {
+      distance_map[it->first] = 1;
+      m_staticRouting->AddHostRouteTo(it->second, it->second, 1, 1);
+      next_hop[it->first] = it->first;
+    } else {
+      distance_map[it->first] = 100000;
+    }
+  }
+
+  while (updated_nodes.size() < node_count) {
+    uint32_t w = m_nodeAddressMap.begin()->first;
+    
+    for (std::map<uint32_t, Ipv4Address>::iterator it=m_nodeAddressMap.begin(); it!=m_nodeAddressMap.end(); ++it) {
+      if (distance_map[it->first] < distance_map[w] && (updated_nodes.find(it->first) == updated_nodes.end())) {
+        w = it->first;
+      }
+      updated_nodes.insert(w);
+
+      for (std::vector<Edge>::iterator edge=m_edges.begin(); edge!=m_edges.end(); ++edge) {
+        if (edge->node1 == w || edge->node2 == w) {
+          uint32_t neighbor;
+          if (edge->node1 == w) {
+            neighbor = edge->node2;
+          } else {
+            neighbor = edge->node1;
+          }
+
+          if (updated_nodes.find(neighbor) == updated_nodes.end()) {
+            if (distance_map[neighbor] <= distance_map[w] + 1) {
+              // pass
+            } else {
+              distance_map[neighbor] = distance_map[w] + 1;
+              next_hop[neighbor] = next_hop[w];
+              m_staticRouting->AddHostRouteTo(m_nodeAddressMap[neighbor], m_nodeAddressMap[next_hop[neighbor]], 1, distance_map[neighbor]);
+            }
+          }
+        }
+      }
+    }
+  }
 }
