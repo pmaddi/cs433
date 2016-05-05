@@ -562,13 +562,18 @@ LSRoutingProtocol::GlobalRoute ()
   std::map<uint32_t, uint32_t> distance_map;
   std::map<uint32_t, uint32_t> next_hop;
 
+  distance_map[100000] = 999999;
+
   for (std::map<uint32_t, Ipv4Address>::iterator it=m_nodeAddressMap.begin(); it!=m_nodeAddressMap.end(); ++it) {
     // for i in nodes
     node_count += 1;
     int found = 0;
     for (std::vector<Edge>::iterator edge=m_edges.begin(); edge!=m_edges.end(); ++edge) {
-      if (found) {
-        found = 1;
+      bool match = (edge->node1 == it->first && edge->node2 == m_node) ||(edge->node2 == it->first && edge->node1 == m_node);
+      if (match) {
+        if (edge->seq == 1) {
+          found = 1;
+        }
       } 
     }
     if (found) {
@@ -581,17 +586,22 @@ LSRoutingProtocol::GlobalRoute ()
   }
 
   while (updated_nodes.size() < node_count) {
-    uint32_t w = m_nodeAddressMap.begin()->first;
+    uint32_t w = 100000;
     
     for (std::map<uint32_t, Ipv4Address>::iterator it=m_nodeAddressMap.begin(); it!=m_nodeAddressMap.end(); ++it) {
       if (distance_map[it->first] < distance_map[w] && (updated_nodes.find(it->first) == updated_nodes.end())) {
         w = it->first;
       }
     }
+
+    if (w == 100000) {
+      NS_ASSERT(false);
+    }
+
     updated_nodes.insert(w);
 
     for (std::vector<Edge>::iterator edge=m_edges.begin(); edge!=m_edges.end(); ++edge) {
-      if (edge->node1 == w || edge->node2 == w) {
+      if (edge->seq == 1 && (edge->node1 == w || edge->node2 == w)) {
         uint32_t neighbor;
         if (edge->node1 == w) {
           neighbor = edge->node2;
@@ -610,5 +620,33 @@ LSRoutingProtocol::GlobalRoute ()
         }
       }
     }
+    
   }
 }
+
+// On update
+// Init:
+//   updated_vector = { me }
+//   distance_map = {}
+//   for v in nodes:
+//     if (v, me) in links_vector:
+//       distance_map[v] = 1
+//       addRoute(v, v)
+//     else
+//       distance_map[v] = MAXINT
+// while updated_vector.size < n_nodes:
+//   w = None
+//   for i in nodes:
+//     if D(i) < D(w) and i not in updated_vector:
+//       w = i
+//   updated_vector.add(w)
+//   for j in w.neighbors():
+//     if j not in updated_vector:
+//       if D(j) <= D(w) + 1:
+//         pass
+//       else:
+//         D[j] = D[w] + 1
+//         addRoute(j, getRoute(w))
+//
+//   
+// m_staticrouting.AddHostRouteTo(dest, nexthop, interface?, 1)
