@@ -90,6 +90,7 @@ class LSRoutingProtocol : public CommRoutingProtocol
     void ProcessPingRsp (LSMessage lsMessage);
     void ProcessHello (LSMessage lsMessage, Ipv4Address sourceAddress);
     void ProcessHelloRsp (uint32_t node);
+    void ProcessLSUpdate (LSMessage lsMessage);
 
     // Periodic Audit
     void AuditPings ();
@@ -215,6 +216,7 @@ class LSRoutingProtocol : public CommRoutingProtocol
     // Status
     void DumpLSA ();
     void DumpNeighbors ();
+    void DumpEdges ();
     void DumpRoutingTable ();
 
   protected:
@@ -229,6 +231,12 @@ class LSRoutingProtocol : public CommRoutingProtocol
 
 
   private:
+    struct Edge{
+      uint32_t node1;
+      uint32_t node2;
+      uint32_t seq;
+    } ;
+
     std::map< Ptr<Socket>, Ipv4InterfaceAddress > m_socketAddresses;
     Ipv4Address m_mainAddress;
     Ptr<Ipv4StaticRouting> m_staticRouting;
@@ -240,11 +248,13 @@ class LSRoutingProtocol : public CommRoutingProtocol
     uint8_t m_maxTTL;
     uint16_t m_lsPort;
     uint32_t m_currentSequenceNumber;
+    uint32_t m_node;
     std::map<uint32_t, Ipv4Address> m_nodeAddressMap;
     std::map<Ipv4Address, uint32_t> m_addressNodeMap;
 
     std::vector<uint32_t> m_neighbors;
     std::vector<uint32_t> m_helloTracker;
+    std::vector<Edge>  m_edges;
 
     // Timers
     Timer m_auditPingsTimer;
