@@ -27,7 +27,7 @@
 #include "ns3/uinteger.h"
 #include "ns3/test-result.h"
 #include <sys/time.h>
-
+#include <stdint.h>
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("LSRoutingProtocol");
@@ -385,6 +385,7 @@ LSRoutingProtocol::DumpRoutingTable ()
 	*/
 	//checkRouteTableEntry();
 }
+
 void
 LSRoutingProtocol::RecvLSMessage (Ptr<Socket> socket)
 {
@@ -435,7 +436,6 @@ LSRoutingProtocol::ProcessPingReq (LSMessage lsMessage)
       BroadcastPacket (packet);
     }
 }
-
 
 void
 LSRoutingProtocol::ProcessHello (LSMessage lsMessage, Ipv4Address sourceAddress)
@@ -690,7 +690,9 @@ LSRoutingProtocol::GlobalRoute ()
         if (edge->seq == 1) {
           found = 1;
         }
-      }
+
+     } 
+
     }
     if (found) {
       distance_map[it->first] = 1;
@@ -736,6 +738,33 @@ LSRoutingProtocol::GlobalRoute ()
         }
       }
     }
-
   }
 }
+
+// On update
+// Init:
+//   updated_vector = { me }
+//   distance_map = {}
+//   for v in nodes:
+//     if (v, me) in links_vector:
+//       distance_map[v] = 1
+//       addRoute(v, v)
+//     else
+//       distance_map[v] = MAXINT
+// while updated_vector.size < n_nodes:
+//   w = None
+//   for i in nodes:
+//     if D(i) < D(w) and i not in updated_vector:
+//       w = i
+//   updated_vector.add(w)
+//   for j in w.neighbors():
+//     if j not in updated_vector:
+//       if D(j) <= D(w) + 1:
+//         pass
+//       else:
+//         D[j] = D[w] + 1
+//         addRoute(j, getRoute(w))
+//
+//   
+// m_staticrouting.AddHostRouteTo(dest, nexthop, interface?, 1)
+>>>>>>> bb09ecf983db889f1f41b8134c4a5444b96e7f36

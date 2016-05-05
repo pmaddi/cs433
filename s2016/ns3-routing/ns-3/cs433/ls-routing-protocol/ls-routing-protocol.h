@@ -214,6 +214,7 @@ class LSRoutingProtocol : public CommRoutingProtocol
      void SayHelloToNeighbors();
      void SendLSUpdates();
 
+
     virtual std::string ReverseLookup (Ipv4Address ipv4Address);
     virtual uint32_t ReverseLookupInt (Ipv4Address ipv4Address);
 

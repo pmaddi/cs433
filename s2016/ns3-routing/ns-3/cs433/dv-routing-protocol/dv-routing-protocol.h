@@ -88,6 +88,8 @@ class DVRoutingProtocol : public CommRoutingProtocol
     void RecvDVMessage (Ptr<Socket> socket);
     void ProcessPingReq (DVMessage DVMessage);
     void ProcessPingRsp (DVMessage DVMessage);
+    void ProcessHello (DVMessage dvMessage, Ipv4Address sourceAddress);
+    void ProcessHelloRsp (uint32_t node);
 
     // Periodic Audit
     void AuditPings ();
@@ -187,6 +189,7 @@ class DVRoutingProtocol : public CommRoutingProtocol
      * \param packet Packet to be sent.
      */
     void BroadcastPacket (Ptr<Packet> packet);
+    void SendPacket (Ptr<Packet> packet, Ipv4Address dest);
     /**
      * \brief Returns the main IP address of a node in Inet topology.
      *
@@ -203,9 +206,13 @@ class DVRoutingProtocol : public CommRoutingProtocol
      * \param ipv4Address IP address of node.
      */
 
-    virtual std::string ReverseLookup (Ipv4Address ipv4Address); 
+    void SayHelloToNeighbors();
+
+    virtual std::string ReverseLookup (Ipv4Address ipv4Address);
+    virtual uint32_t ReverseLookupInt (Ipv4Address ipv4Address);
     
     // Status 
+    void DumpDVA ();
     void DumpNeighbors ();
     void DumpRoutingTable ();
 
@@ -226,13 +233,23 @@ class DVRoutingProtocol : public CommRoutingProtocol
     Ptr<Ipv4StaticRouting> m_staticRouting;
     Ptr<Ipv4> m_ipv4;
     Time m_pingTimeout;
+
+    Time m_helloTimeout;
+
     uint8_t m_maxTTL;
     uint16_t m_dvPort;
     uint32_t m_currentSequenceNumber;
     std::map<uint32_t, Ipv4Address> m_nodeAddressMap;
     std::map<Ipv4Address, uint32_t> m_addressNodeMap;
+
+    std::vector<uint32_t> m_neighbors;
+    std::vector<uint32_t> m_helloTracker;
+
     // Timers
     Timer m_auditPingsTimer;
+
+    Timer m_sayHelloTimer;
+
     // Ping tracker
     std::map<uint32_t, Ptr<PingRequest> > m_pingTracker;
 };

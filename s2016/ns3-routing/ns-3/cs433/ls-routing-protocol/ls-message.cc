@@ -297,11 +297,6 @@ LSMessage::GetPingRsp ()
 }
 
 
-
-
-
-
-
 // Hello
 
 uint32_t

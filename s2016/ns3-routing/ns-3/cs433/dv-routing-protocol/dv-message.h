@@ -37,7 +37,8 @@ class DVMessage : public Header
       {
         PING_REQ = 1,
         PING_RSP = 2,
-        // Define extra message types when needed       
+        HELLO = 3,
+        HELLO_RSP = 4,     
       };
 
     DVMessage (DVMessage::MessageType messageType, uint32_t sequenceNumber, uint8_t ttl, Ipv4Address originatorAddress);
@@ -128,12 +129,31 @@ class DVMessage : public Header
         std::string pingMessage;
       };
 
+      struct Hello {
+        void Print (std::ostream &os) const;
+        uint32_t GetSerializedSize (void) const;
+        void Serialize (Buffer::Iterator &start) const;
+        uint32_t Deserialize (Buffer::Iterator &start);
+        // Payload
+        std::string msg = "hey";
+    };
+    
+    struct HelloRSP {
+        void Print (std::ostream &os) const;
+        uint32_t GetSerializedSize (void) const;
+        void Serialize (Buffer::Iterator &start) const;
+        uint32_t Deserialize (Buffer::Iterator &start);
+        // Payload
+        std::string msg = "heyrsp";
+    };
 
   private:
     struct
       {
         PingReq pingReq;
         PingRsp pingRsp;
+        Hello hello;
+        HelloRSP helloRsp;
       } m_message;
     
   public:
@@ -158,6 +178,11 @@ class DVMessage : public Header
      *  \param message Payload String
      */
     void SetPingRsp (Ipv4Address destinationAddress, std::string message);
+
+    Hello GetHello ();
+    void SetHello ();
+    HelloRSP GetHelloRsp ();
+    void SetHelloRsp ();
 
 }; // class DVMessage
 
