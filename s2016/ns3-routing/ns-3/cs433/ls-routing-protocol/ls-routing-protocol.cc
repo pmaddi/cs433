@@ -691,7 +691,7 @@ LSRoutingProtocol::GlobalRoute ()
           found = 1;
         }
 
-     } 
+     }
 
     }
     if (found) {
@@ -765,6 +765,5 @@ LSRoutingProtocol::GlobalRoute ()
 //         D[j] = D[w] + 1
 //         addRoute(j, getRoute(w))
 //
-//   
+//
 // m_staticrouting.AddHostRouteTo(dest, nexthop, interface?, 1)
->>>>>>> bb09ecf983db889f1f41b8134c4a5444b96e7f36
