@@ -550,6 +550,8 @@ LSRoutingProtocol::SetIpv4 (Ptr<Ipv4> ipv4)
 void
 LSRoutingProtocol::GlobalRoute ()
 {
+  // TODO how to clear m_staticRouting? Maybe DoDispose, but protected. Perhaps subclass
+
   // init
 
   std::set<uint32_t> updated_nodes;
@@ -585,25 +587,25 @@ LSRoutingProtocol::GlobalRoute ()
       if (distance_map[it->first] < distance_map[w] && (updated_nodes.find(it->first) == updated_nodes.end())) {
         w = it->first;
       }
-      updated_nodes.insert(w);
+    }
+    updated_nodes.insert(w);
 
-      for (std::vector<Edge>::iterator edge=m_edges.begin(); edge!=m_edges.end(); ++edge) {
-        if (edge->node1 == w || edge->node2 == w) {
-          uint32_t neighbor;
-          if (edge->node1 == w) {
-            neighbor = edge->node2;
+    for (std::vector<Edge>::iterator edge=m_edges.begin(); edge!=m_edges.end(); ++edge) {
+      if (edge->node1 == w || edge->node2 == w) {
+        uint32_t neighbor;
+        if (edge->node1 == w) {
+          neighbor = edge->node2;
+        } else {
+          neighbor = edge->node1;
+        }
+
+        if (updated_nodes.find(neighbor) == updated_nodes.end()) {
+          if (distance_map[neighbor] <= distance_map[w] + 1) {
+            // pass
           } else {
-            neighbor = edge->node1;
-          }
-
-          if (updated_nodes.find(neighbor) == updated_nodes.end()) {
-            if (distance_map[neighbor] <= distance_map[w] + 1) {
-              // pass
-            } else {
-              distance_map[neighbor] = distance_map[w] + 1;
-              next_hop[neighbor] = next_hop[w];
-              m_staticRouting->AddHostRouteTo(m_nodeAddressMap[neighbor], m_nodeAddressMap[next_hop[neighbor]], 1, distance_map[neighbor]);
-            }
+            distance_map[neighbor] = distance_map[w] + 1;
+            next_hop[neighbor] = next_hop[w];
+            m_staticRouting->AddHostRouteTo(m_nodeAddressMap[neighbor], m_nodeAddressMap[next_hop[neighbor]], 1, distance_map[neighbor]);
           }
         }
       }
