@@ -300,7 +300,15 @@ LSRoutingProtocol::ProcessCommand (std::vector<std::string> tokens)
           LSMessage lsMessage = LSMessage (LSMessage::PING_REQ, sequenceNumber, m_maxTTL, m_mainAddress);
           lsMessage.SetPingReq (destAddress, pingMessage);
           packet->AddHeader (lsMessage);
-          BroadcastPacket (packet);
+          for (int i=0; i < m_staticRouting->GetNRoutes(); i++) {
+            Ipv4RoutingTableEntry entry = m_staticRouting->GetRoute(i);
+            if (nodeNumber == m_addressNodeMap[entry.GetDest()]
+                    && m_staticRouting->GetMetric(i)) {
+                // Send to next hop
+                SendPacket(packet, entry.GetGateway());
+                return;
+            }
+          }
         }
     }
   else if (command == "DUMP")
@@ -432,19 +440,43 @@ LSRoutingProtocol::RecvLSMessage (Ptr<Socket> socket)
 void
 LSRoutingProtocol::ProcessPingReq (LSMessage lsMessage)
 {
+    PRINT_LOG("HIIIII");
   // Check destination address
-  if (IsOwnAddress (lsMessage.GetPingReq().destinationAddress))
-    {
+  if (IsOwnAddress (lsMessage.GetPingReq().destinationAddress)) {
       // Use reverse lookup for ease of debug
       std::string fromNode = ReverseLookup (lsMessage.GetOriginatorAddress ());
-      TRAFFIC_LOG ("Received PING_REQ, From Node: " << fromNode << ", Message: " << lsMessage.GetPingReq().pingMessage);
+      TRAFFIC_LOG ("Received PING_REQ, From Node: " 
+              << fromNode << ", Message: " 
+              << lsMessage.GetPingReq().pingMessage);
       // Send Ping Response
-      LSMessage lsResp = LSMessage (LSMessage::PING_RSP, lsMessage.GetSequenceNumber(), m_maxTTL, m_mainAddress);
-      lsResp.SetPingRsp (lsMessage.GetOriginatorAddress(), lsMessage.GetPingReq().pingMessage);
+      LSMessage lsResp = LSMessage (
+              LSMessage::PING_RSP, 
+              lsMessage.GetSequenceNumber(), m_maxTTL, m_mainAddress);
+      lsResp.SetPingRsp(
+              lsMessage.GetOriginatorAddress(), 
+              lsMessage.GetPingReq().pingMessage);
       Ptr<Packet> packet = Create<Packet> ();
       packet->AddHeader (lsResp);
       BroadcastPacket (packet);
-    }
+    } else {
+      // Forward packet
+      for (int i=0; i < m_staticRouting->GetNRoutes(); i++) {
+          Ipv4RoutingTableEntry entry = m_staticRouting->GetRoute(i);
+          if (m_addressNodeMap[lsMessage.GetPingReq().destinationAddress] 
+                  == m_addressNodeMap[entry.GetDest()]
+                && m_staticRouting->GetMetric(i)) {
+            // Send to next hop
+            Ptr<Packet> packet = Create<Packet>();
+            packet->AddHeader(lsMessage);
+            SendPacket(packet, entry.GetGateway());
+            TRAFFIC_LOG ("Received PING_REQ, From Node: " 
+                    << m_addressNodeMap[lsMessage.GetPingReq().destinationAddress]  
+                    << ", Message: " << lsMessage.GetPingReq().pingMessage
+                    << ", Forwarding to: " << m_addressNodeMap[entry.GetGateway()]);
+            return;
+          }
+      }
+  }
 }
 
 void
@@ -452,7 +484,8 @@ LSRoutingProtocol::ProcessHello (LSMessage lsMessage, Ipv4Address sourceAddress)
 {
     // TODO add hello to tbl
 
-    LSMessage lsResp = LSMessage (LSMessage::HELLO_RSP, lsMessage.GetSequenceNumber(), 1, m_mainAddress);
+    LSMessage lsResp = LSMessage (LSMessage::HELLO_RSP, 
+            lsMessage.GetSequenceNumber(), 1, m_mainAddress);
     lsResp.SetHelloRsp();
     Ptr<Packet> packet = Create<Packet> ();
     packet->AddHeader (lsResp);
@@ -605,6 +638,8 @@ LSRoutingProtocol::SayHelloToNeighbors() {
   {
     m_neighbors.erase(std::remove(m_neighbors.begin(), m_neighbors.end(), m_helloTracker[i]), m_neighbors.end());
 
+    PRINT_LOG("NODE DOWN " << m_helloTracker[i]);
+
     for(int i = 0; i<m_edges.size(); i++){
       Edge e = m_edges[i];
       if((e.node1==m_helloTracker[i] && e.node2==m_node) || (e.node2==m_helloTracker[i] && e.node1==m_node)){
@@ -715,7 +750,6 @@ LSRoutingProtocol::GlobalRoute ()
     // if we found a neighbor
     if (found) {
       distance_map[it->first] = 1;
-
       m_staticRouting->AddHostRouteTo(it->second, it->second, 1, 1);
       next_hop[it->first] = it->first;
     } else {
@@ -748,7 +782,8 @@ LSRoutingProtocol::GlobalRoute ()
           } else {
             distance_map[neighbor] = distance_map[w] + 1;
             next_hop[neighbor] = next_hop[w];
-            m_staticRouting->AddHostRouteTo(m_nodeAddressMap[neighbor], m_nodeAddressMap[next_hop[neighbor]], 1, distance_map[neighbor]);
+            m_staticRouting->AddHostRouteTo(m_nodeAddressMap[neighbor], 
+                    m_nodeAddressMap[next_hop[neighbor]], 1, distance_map[neighbor]);
           }
         }
       }
