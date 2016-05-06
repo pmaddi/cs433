@@ -26,6 +26,7 @@
 #include "ns3/ipv4-route.h"
 #include "ns3/uinteger.h"
 #include "ns3/test-result.h"
+#include "ns3/ipv4-routing-table-entry.h"
 #include <sys/time.h>
 #include <stdint.h>
 using namespace ns3;
@@ -378,7 +379,16 @@ LSRoutingProtocol::DumpRoutingTable ()
 	STATUS_LOG (std::endl << "**************** Route Table ********************" << std::endl
 			  << "DestNumber\t\tDestAddr\t\tNextHopNumber\t\tNextHopAddr\t\tInterfaceAddr\t\tCost");
 
-	PRINT_LOG ("");
+    for (int i=0; i < m_staticRouting->GetNRoutes(); i++) {
+      Ipv4RoutingTableEntry entry = m_staticRouting->GetRoute(i);
+      PRINT_LOG("" 
+              << m_addressNodeMap[entry.GetDest()]  
+              << "\t\t\t" << entry.GetDest() 
+              << "\t\t\t" << m_addressNodeMap[entry.GetGateway()]
+              << "\t\t\t" << entry.GetGateway()
+              << "\t\t\t" << entry.GetInterface()
+              << "\t\t\t" << m_staticRouting->GetMetric(i));
+    }
 
 	/*NOTE: For purpose of autograding, you should invoke the following function for each
 	routing table entry. The output format is indicated by parameter name and type.
@@ -666,7 +676,10 @@ LSRoutingProtocol::SetIpv4 (Ptr<Ipv4> ipv4)
 void
 LSRoutingProtocol::GlobalRoute ()
 {
-  // TODO how to clear m_staticRouting? Maybe DoDispose, but protected. Perhaps subclass
+
+  for (int i=0; i < m_staticRouting->GetNRoutes(); i++) {
+    m_staticRouting->RemoveRoute(i);
+  }
 
   // init
 
@@ -681,6 +694,7 @@ LSRoutingProtocol::GlobalRoute ()
   distance_map[100000] = 999999;
 
   for (std::map<uint32_t, Ipv4Address>::iterator it=m_nodeAddressMap.begin(); it!=m_nodeAddressMap.end(); ++it) {
+
     // for i in nodes
     node_count += 1;
     int found = 0;
@@ -690,12 +704,18 @@ LSRoutingProtocol::GlobalRoute ()
         if (edge->seq == 1) {
           found = 1;
         }
-
      }
-
     }
     if (found) {
       distance_map[it->first] = 1;
+
+//      for (int i=0; i < m_staticRouting->GetNRoutes(); i++) {
+//        Ipv4RoutingTableEntry entry = m_staticRouting->GetRoute(i);
+//        if (m_addressNodeMap[entry.GetDest()] == m_addressNodeMap[it->second]) {
+//          m_staticRouting->RemoveRoute(i);
+//        }
+//      }
+
       m_staticRouting->AddHostRouteTo(it->second, it->second, 1, 1);
       next_hop[it->first] = it->first;
     } else {
@@ -705,19 +725,15 @@ LSRoutingProtocol::GlobalRoute ()
 
   while (updated_nodes.size() < node_count) {
     uint32_t w = 100000;
-
     for (std::map<uint32_t, Ipv4Address>::iterator it=m_nodeAddressMap.begin(); it!=m_nodeAddressMap.end(); ++it) {
       if (distance_map[it->first] < distance_map[w] && (updated_nodes.find(it->first) == updated_nodes.end())) {
         w = it->first;
       }
     }
-
     if (w == 100000) {
       NS_ASSERT(false);
     }
-
     updated_nodes.insert(w);
-
     for (std::vector<Edge>::iterator edge=m_edges.begin(); edge!=m_edges.end(); ++edge) {
       if (edge->seq == 1 && (edge->node1 == w || edge->node2 == w)) {
         uint32_t neighbor;
@@ -726,13 +742,20 @@ LSRoutingProtocol::GlobalRoute ()
         } else {
           neighbor = edge->node1;
         }
-
         if (updated_nodes.find(neighbor) == updated_nodes.end()) {
           if (distance_map[neighbor] <= distance_map[w] + 1) {
             // pass
           } else {
             distance_map[neighbor] = distance_map[w] + 1;
             next_hop[neighbor] = next_hop[w];
+
+            for (int i=0; i < m_staticRouting->GetNRoutes(); i++) {
+              Ipv4RoutingTableEntry entry = m_staticRouting->GetRoute(i);
+              if (m_addressNodeMap[entry.GetDest()] == neighbor) {
+                m_staticRouting->RemoveRoute(i);
+              }
+            }
+
             m_staticRouting->AddHostRouteTo(m_nodeAddressMap[neighbor], m_nodeAddressMap[next_hop[neighbor]], 1, distance_map[neighbor]);
           }
         }
