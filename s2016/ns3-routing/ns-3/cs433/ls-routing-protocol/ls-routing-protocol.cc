@@ -676,10 +676,15 @@ LSRoutingProtocol::SetIpv4 (Ptr<Ipv4> ipv4)
 void
 LSRoutingProtocol::GlobalRoute ()
 {
-
-  for (int i=0; i < m_staticRouting->GetNRoutes(); i++) {
-    m_staticRouting->RemoveRoute(i);
-  }
+    // Clear
+    int i = 0;
+    while (i < m_staticRouting->GetNRoutes() ) {
+        if (m_staticRouting->GetMetric(i) > 0) {
+          m_staticRouting->RemoveRoute(i);
+        } else {
+          i ++;
+        }
+    }
 
   // init
 
@@ -706,15 +711,10 @@ LSRoutingProtocol::GlobalRoute ()
         }
      }
     }
+
+    // if we found a neighbor
     if (found) {
       distance_map[it->first] = 1;
-
-//      for (int i=0; i < m_staticRouting->GetNRoutes(); i++) {
-//        Ipv4RoutingTableEntry entry = m_staticRouting->GetRoute(i);
-//        if (m_addressNodeMap[entry.GetDest()] == m_addressNodeMap[it->second]) {
-//          m_staticRouting->RemoveRoute(i);
-//        }
-//      }
 
       m_staticRouting->AddHostRouteTo(it->second, it->second, 1, 1);
       next_hop[it->first] = it->first;
@@ -748,14 +748,6 @@ LSRoutingProtocol::GlobalRoute ()
           } else {
             distance_map[neighbor] = distance_map[w] + 1;
             next_hop[neighbor] = next_hop[w];
-
-            for (int i=0; i < m_staticRouting->GetNRoutes(); i++) {
-              Ipv4RoutingTableEntry entry = m_staticRouting->GetRoute(i);
-              if (m_addressNodeMap[entry.GetDest()] == neighbor) {
-                m_staticRouting->RemoveRoute(i);
-              }
-            }
-
             m_staticRouting->AddHostRouteTo(m_nodeAddressMap[neighbor], m_nodeAddressMap[next_hop[neighbor]], 1, distance_map[neighbor]);
           }
         }
@@ -764,29 +756,3 @@ LSRoutingProtocol::GlobalRoute ()
   }
 }
 
-// On update
-// Init:
-//   updated_vector = { me }
-//   distance_map = {}
-//   for v in nodes:
-//     if (v, me) in links_vector:
-//       distance_map[v] = 1
-//       addRoute(v, v)
-//     else
-//       distance_map[v] = MAXINT
-// while updated_vector.size < n_nodes:
-//   w = None
-//   for i in nodes:
-//     if D(i) < D(w) and i not in updated_vector:
-//       w = i
-//   updated_vector.add(w)
-//   for j in w.neighbors():
-//     if j not in updated_vector:
-//       if D(j) <= D(w) + 1:
-//         pass
-//       else:
-//         D[j] = D[w] + 1
-//         addRoute(j, getRoute(w))
-//
-//
-// m_staticrouting.AddHostRouteTo(dest, nexthop, interface?, 1)
