@@ -304,6 +304,7 @@ LSRoutingProtocol::ProcessCommand (std::vector<std::string> tokens)
             Ipv4RoutingTableEntry entry = m_staticRouting->GetRoute(i);
             if (nodeNumber == m_addressNodeMap[entry.GetDest()]
                     && m_staticRouting->GetMetric(i)) {
+                PRINT_LOG("NEXT " << entry.GetDest() << " " << entry.GetGateway());
                 // Send to next hop
                 SendPacket(packet, entry.GetGateway());
                 return;
@@ -558,6 +559,15 @@ LSRoutingProtocol::ProcessHelloRsp (uint32_t node, Ipv4Address sourceAddress)
       }
     }
 
+    for(int i = 0; i < m_edges.size(); i++){
+        Edge l = m_edges[i];
+        if((l.node1 == e.node1 && l.node2 == e.node2) || 
+           (l.node2 == e.node1 && l.node1 == e.node2)){
+            PRINT_LOG("BACK ONLNE");
+            m_edges.erase(m_edges.begin() + i);
+        }
+    }
+
     for(int i = 0; i<m_edges.size(); i++){
       Edge l = m_edges[i];
       LSMessage lsu = LSMessage(LSMessage::LS_UPDATE, GetNextSequenceNumber(), 1, m_mainAddress);
@@ -569,6 +579,7 @@ LSRoutingProtocol::ProcessHelloRsp (uint32_t node, Ipv4Address sourceAddress)
 
     m_edges.push_back(e);
     GlobalRoute();
+    DumpEdges(); 
   }
 }
 
@@ -739,7 +750,7 @@ LSRoutingProtocol::GlobalRoute ()
     node_count += 1;
     int found = 0;
     for (std::vector<Edge>::iterator edge=m_edges.begin(); edge!=m_edges.end(); ++edge) {
-      bool match = (edge->node1 == it->first && edge->node2 == m_node) ||(edge->node2 == it->first && edge->node1 == m_node);
+      bool match = (edge->node1 == it->first && edge->node2 == m_node) || (edge->node2 == it->first && edge->node1 == m_node);
       if (match) {
         if (edge->seq == 1) {
           found = 1;
@@ -750,7 +761,20 @@ LSRoutingProtocol::GlobalRoute ()
     // if we found a neighbor
     if (found) {
       distance_map[it->first] = 1;
-      m_staticRouting->AddHostRouteTo(it->second, it->second, 1, 1);
+      int j = 1;
+      for (std::map<Ptr<Socket> , Ipv4InterfaceAddress>::const_iterator i =
+              m_socketAddresses.begin (); i != m_socketAddresses.end (); i++)
+      {
+          if((i->second.GetLocal().Get() & i->second.GetMask().Get()) == (it->second.Get() & i->second.GetMask().Get())){
+              m_staticRouting->AddHostRouteTo(it->second, it->second, j, 1);
+              j = -1;
+              break;
+          }
+          j++;
+      }
+      if (j != -1) {
+          m_staticRouting->AddHostRouteTo(it->second, it->second, 1, 1);
+      }
       next_hop[it->first] = it->first;
     } else {
       distance_map[it->first] = 100000;
