@@ -30,6 +30,7 @@
 #include "ns3/comm-routing-protocol.h"
 #include "ns3/dv-message.h"
 
+#include <algorithm>
 #include <vector>
 #include <map>
 
@@ -90,6 +91,7 @@ class DVRoutingProtocol : public CommRoutingProtocol
     void ProcessPingRsp (DVMessage DVMessage);
     void ProcessHello (DVMessage dvMessage, Ipv4Address sourceAddress);
     void ProcessHelloRsp (uint32_t node);
+    void ProcessDV(DVMessage dvMessage, uint32_t node);
 
     // Periodic Audit
     void AuditPings ();
@@ -208,11 +210,18 @@ class DVRoutingProtocol : public CommRoutingProtocol
 
     void SayHelloToNeighbors();
 
+    void SendDVToNeighbors();
+    void UpdateDV();
+
     virtual std::string ReverseLookup (Ipv4Address ipv4Address);
     virtual uint32_t ReverseLookupInt (Ipv4Address ipv4Address);
+
+    uint32_t LocalNode() {
+        return ReverseLookupInt(m_mainAddress);
+    }
     
     // Status 
-    void DumpDVA ();
+    void DumpDV();
     void DumpNeighbors ();
     void DumpRoutingTable ();
 
@@ -242,8 +251,14 @@ class DVRoutingProtocol : public CommRoutingProtocol
     std::map<uint32_t, Ipv4Address> m_nodeAddressMap;
     std::map<Ipv4Address, uint32_t> m_addressNodeMap;
 
-    std::vector<uint32_t> m_neighbors;
+    std::map<uint32_t, uint32_t> m_neighbors;
     std::vector<uint32_t> m_helloTracker;
+
+    std::map<uint32_t, uint32_t> dv;
+
+    std::map<uint32_t, uint32_t> routing_table;
+
+    std::vector<std::pair<uint32_t, std::map<uint32_t, uint32_t> > > neighbor_dvs;
 
     // Timers
     Timer m_auditPingsTimer;

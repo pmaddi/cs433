@@ -33,6 +33,11 @@ using namespace ns3;
 NS_LOG_COMPONENT_DEFINE ("DVRoutingProtocol");
 NS_OBJECT_ENSURE_REGISTERED (DVRoutingProtocol);
 
+#define MAX_DISTANCE 16;
+#define min(a, b) (((a) < (b)) ? (a) : (b))
+
+static const uint32_t INTERFACE_ANY = 0xffffffff;
+
 TypeId
 DVRoutingProtocol::GetTypeId (void)
 {
@@ -57,8 +62,7 @@ DVRoutingProtocol::GetTypeId (void)
   .AddAttribute ("HelloTimeout",
                  "Timeout value for HELLO in milliseconds",
                  TimeValue(MilliSeconds (20000)),
-                 MakeTimeAccessor (&DVRoutingProtocol::m_helloTimeout),
-                 MakeTimeChecker ())
+                 MakeTimeAccessor (&DVRoutingProtocol::m_helloTimeout), MakeTimeChecker ())
   ;
   return tid;
 }
@@ -96,7 +100,8 @@ DVRoutingProtocol::DoDispose ()
   m_auditPingsTimer.Cancel ();
   m_sayHelloTimer.Cancel();
  
-  m_pingTracker.clear (); 
+  m_pingTracker.clear ();
+  m_helloTracker.clear();
 
   CommRoutingProtocol::DoDispose ();
 }
@@ -159,9 +164,6 @@ DVRoutingProtocol::ReverseLookup (Ipv4Address ipAddress)
 void
 DVRoutingProtocol::DoStart ()
 {
-
-  STATUS_LOG("in DoStart()");
-
   // Create sockets
   for (uint32_t i = 0 ; i < m_ipv4->GetNInterfaces () ; i++)
     {
@@ -182,8 +184,20 @@ DVRoutingProtocol::DoStart ()
       socket->BindToNetDevice (netDevice);
       m_socketAddresses[socket] = m_ipv4->GetAddress (i, 0);
     }
-  m_neighbors.reserve(10);
   m_helloTracker.reserve(10);
+
+  // Initialize our distance vector with distances to all nodes set to maximum distance
+  std::map<uint32_t, Ipv4Address>::iterator it;
+  for (it = m_nodeAddressMap.begin(); it != m_nodeAddressMap.end(); ++it) {
+    routing_table[it->first] = ReverseLookupInt(m_mainAddress);
+
+    dv[it->first] = MAX_DISTANCE;
+    if (IsOwnAddress(ResolveNodeIpAddress(it->first))) {
+      dv[it->first] = 0;
+    }
+
+    m_neighbors[it->first] = MAX_DISTANCE;
+  }
 
   // Configure timers
   m_auditPingsTimer.SetFunction (&DVRoutingProtocol::AuditPings, this);
@@ -192,7 +206,6 @@ DVRoutingProtocol::DoStart ()
   // Start timers
   m_auditPingsTimer.Schedule (m_pingTimeout);
   m_sayHelloTimer.Schedule(m_helloTimeout);
-
 }
 
 Ptr<Ipv4Route>
@@ -294,9 +307,13 @@ DVRoutingProtocol::ProcessCommand (std::vector<std::string> tokens)
           m_pingTracker.insert (std::make_pair (sequenceNumber, pingRequest));
           Ptr<Packet> packet = Create<Packet> ();
           DVMessage dvMessage = DVMessage (DVMessage::PING_REQ, sequenceNumber, m_maxTTL, m_mainAddress);
-          dvMessage.SetPingReq (destAddress, pingMessage);
+          dvMessage.SetPingReq (destAddress, ResolveNodeIpAddress(routing_table[ReverseLookupInt(destAddress)]), pingMessage);
           packet->AddHeader (dvMessage);
-          BroadcastPacket (packet);
+
+          PRINT_LOG("\nNode " << LocalNode() << ": sending PING_REQ to node " << nodeNumber << ". Message: " << pingMessage);
+
+          // Send packet along to the next hop
+          BroadcastPacket(packet);
         }
     }
   else if (command == "DUMP")
@@ -316,19 +333,23 @@ DVRoutingProtocol::ProcessCommand (std::vector<std::string> tokens)
         {
           DumpNeighbors ();
         }
-      else if (table == "DVA")
+      else if (table == "DV")
         {
-          DumpDVA ();
+          DumpDV ();
         }
     }
 }
 
 void
-DVRoutingProtocol::DumpDVA ()
+DVRoutingProtocol::DumpDV()
 {
-  STATUS_LOG (std::endl << "**************** DVA DUMP ********************" << std::endl
-              << "Node\t\tNeighbor(s)");
-  PRINT_LOG ("");
+  STATUS_LOG (std::endl << "**************** DV DUMP ********************" << std::endl
+              << "Node\tDistance to node");
+
+  std::map<uint32_t, uint32_t>::iterator it;
+  for (it = dv.begin(); it != dv.end(); ++it) {
+    PRINT_LOG ("" << it->first << "\t" << it->second);
+  }
 }
 
 void
@@ -336,16 +357,21 @@ DVRoutingProtocol::DumpNeighbors ()
 {
   STATUS_LOG (std::endl << "**************** Neighbor List ********************" << std::endl
               << "NeighborNumber\t\tNeighborAddr\t\tInterfaceAddr");
-  for(int i=0; i<m_neighbors.size(); i++)
+
+  std::map<uint32_t, uint32_t>::iterator it;
+  for (it = m_neighbors.begin(); it != m_neighbors.end(); ++it) 
   {
-    uint32_t node = m_neighbors[i];
-    PRINT_LOG(""<<node<<"\t\t\t"<<ResolveNodeIpAddress(node)<<"\t\t"<<m_socketAddresses.begin()->second.GetLocal());
+    if (it->second == 1) {
+      uint32_t node = it->first;
+      PRINT_LOG(""<<node<<"\t\t\t"<<ResolveNodeIpAddress(node)<<"\t\t"<<m_socketAddresses.begin()->second.GetLocal());
+      checkNeighborTableEntry(node, ResolveNodeIpAddress(node), m_socketAddresses.begin()->second.GetLocal());
+    }
   }
 
   /*NOTE: For purpose of autograding, you should invoke the following function for each
   neighbor table entry. The output format is indicated by parameter name and type.
   */
-  //  checkNeighborTableEntry();
+  // checkNeighborTableEntry();
 }
 
 void
@@ -354,7 +380,16 @@ DVRoutingProtocol::DumpRoutingTable ()
   STATUS_LOG (std::endl << "**************** Route Table ********************" << std::endl
               << "DestNumber\t\tDestAddr\t\tNextHopNumber\t\tNextHopAddr\t\tInterfaceAddr\t\tCost");
 
-  PRINT_LOG ("");
+  std::map<uint32_t, uint32_t>::iterator it;
+  for (it = routing_table.begin(); it != routing_table.end(); ++it) {
+    uint32_t destNode = it->first;
+    uint32_t nextHopNode = it->second;
+    PRINT_LOG(""<<destNode<<"\t\t\t"<<ResolveNodeIpAddress(destNode)<<"\t\t"
+            <<nextHopNode<<"\t\t\t"<<ResolveNodeIpAddress(nextHopNode)<<"\t\t"
+            <<m_socketAddresses.begin()->second.GetLocal()<<"\t\t"<<dv[destNode]);
+    checkRouteTableEntry(destNode, ResolveNodeIpAddress(destNode), nextHopNode, ResolveNodeIpAddress(nextHopNode),
+                         m_socketAddresses.begin()->second.GetLocal(), dv[destNode]);
+  }
 
   /*NOTE: For purpose of autograding, you should invoke the following function for each
   routing table entry. The output format is indicated by parameter name and type.
@@ -386,6 +421,9 @@ DVRoutingProtocol::RecvDVMessage (Ptr<Socket> socket)
       case DVMessage::HELLO_RSP:
         ProcessHelloRsp(ReverseLookupInt(dvMessage.GetOriginatorAddress ()));
         break;
+      case DVMessage::DISTANCE_VECTOR_ADVERTISEMENT:
+        ProcessDV(dvMessage, ReverseLookupInt(dvMessage.GetOriginatorAddress()));
+        break;
       default:
         ERROR_LOG ("Unknown Message Type!");
         break;
@@ -396,40 +434,27 @@ void
 DVRoutingProtocol::ProcessPingReq (DVMessage dvMessage)
 {
   // Check destination address
-  if (IsOwnAddress (dvMessage.GetPingReq().destinationAddress))
-    {
-      // Use reverse lookup for ease of debug
+  if (IsOwnAddress (dvMessage.GetPingReq().destinationAddress)) {
       std::string fromNode = ReverseLookup (dvMessage.GetOriginatorAddress ());
+
+      PRINT_LOG("Node " << LocalNode() << ": received PING_REQ from node " << fromNode << ". Message: " << dvMessage.GetPingReq().pingMessage << "... Sending response");
+
       TRAFFIC_LOG ("Received PING_REQ, From Node: " << fromNode << ", Message: " << dvMessage.GetPingReq().pingMessage);
       // Send Ping Response
       DVMessage dvResp = DVMessage (DVMessage::PING_RSP, dvMessage.GetSequenceNumber(), m_maxTTL, m_mainAddress);
-      dvResp.SetPingRsp (dvMessage.GetOriginatorAddress(), dvMessage.GetPingReq().pingMessage);
+      dvResp.SetPingRsp (dvMessage.GetOriginatorAddress(), ResolveNodeIpAddress(routing_table[ReverseLookupInt(dvMessage.GetOriginatorAddress())]), dvMessage.GetPingReq().pingMessage);
       Ptr<Packet> packet = Create<Packet> ();
       packet->AddHeader (dvResp);
-      BroadcastPacket (packet);
+
+      BroadcastPacket(packet);
     }
-}
+  else if (IsOwnAddress(dvMessage.GetPingReq().nextHop)) {
+      PRINT_LOG("Node " << LocalNode() << ": forwarding PING_REQ to node " << routing_table[ReverseLookupInt(dvMessage.GetPingReq().destinationAddress)]);
 
-void
-DVRoutingProtocol::ProcessHello (DVMessage dvMessage, Ipv4Address sourceAddress)
-{
-    // TODO add hello to tbl
-
-    DVMessage dvResp = DVMessage (DVMessage::HELLO_RSP, dvMessage.GetSequenceNumber(), 1, m_mainAddress);
-    dvResp.SetHelloRsp();
-    Ptr<Packet> packet = Create<Packet> ();
-    packet->AddHeader (dvResp);
-    SendPacket(packet, sourceAddress);
-}
-
-void
-DVRoutingProtocol::ProcessHelloRsp (uint32_t node)
-{
-  if(std::find(m_neighbors.begin(), m_neighbors.end(), node) != m_neighbors.end()) {
-    m_helloTracker.erase(std::remove(m_helloTracker.begin(), m_helloTracker.end(), node), m_helloTracker.end());
-  } else {
-    m_neighbors.push_back(node);
-    STATUS_LOG("New Neighbor: "<<node);
+      Ptr<Packet> packet = Create<Packet> ();
+      dvMessage.SetPingReqNextHop(ResolveNodeIpAddress(routing_table[ReverseLookupInt(dvMessage.GetPingReq().destinationAddress)]));
+      packet->AddHeader (dvMessage);
+      BroadcastPacket(packet);
   }
 }
 
@@ -437,22 +462,172 @@ void
 DVRoutingProtocol::ProcessPingRsp (DVMessage dvMessage)
 {
   // Check destination address
-  if (IsOwnAddress (dvMessage.GetPingRsp().destinationAddress))
-    {
-      // Remove from pingTracker
-      std::map<uint32_t, Ptr<PingRequest> >::iterator iter;
-      iter = m_pingTracker.find (dvMessage.GetSequenceNumber ());
-      if (iter != m_pingTracker.end ())
-        {
-          std::string fromNode = ReverseLookup (dvMessage.GetOriginatorAddress ());
-          TRAFFIC_LOG ("Received PING_RSP, From Node: " << fromNode << ", Message: " << dvMessage.GetPingRsp().pingMessage);
-          m_pingTracker.erase (iter);
-        }
-      else
-        {
-          DEBUG_LOG ("Received invalid PING_RSP!");
-        }
+  if (IsOwnAddress (dvMessage.GetPingRsp().destinationAddress)) {
+    // Remove from pingTracker
+    std::map<uint32_t, Ptr<PingRequest> >::iterator iter;
+    iter = m_pingTracker.find (dvMessage.GetSequenceNumber ());
+    if (iter != m_pingTracker.end ())
+      {
+        std::string fromNode = ReverseLookup (dvMessage.GetOriginatorAddress ());
+
+        PRINT_LOG("Node " << LocalNode() << ": received PING_RSP from node " << fromNode << ". Message: " << dvMessage.GetPingRsp().pingMessage);
+
+        TRAFFIC_LOG ("Received PING_RSP, From Node: " << fromNode << ", Message: " << dvMessage.GetPingRsp().pingMessage);
+        m_pingTracker.erase (iter);
+      }
+    else
+      {
+        DEBUG_LOG ("Received invalid PING_RSP!");
+      }
+  }
+  else if (IsOwnAddress(dvMessage.GetPingRsp().nextHop)) {
+    PRINT_LOG("Node " << LocalNode() << ": forwarding PING_RSP to node " << routing_table[ReverseLookupInt(dvMessage.GetPingReq().destinationAddress)]);
+
+    Ptr<Packet> packet = Create<Packet> ();
+    dvMessage.SetPingRspNextHop(ResolveNodeIpAddress(routing_table[ReverseLookupInt(dvMessage.GetPingReq().destinationAddress)]));
+    packet->AddHeader (dvMessage);
+    BroadcastPacket(packet);
+  }
+}
+
+void
+DVRoutingProtocol::ProcessHello (DVMessage dvMessage, Ipv4Address sourceAddress)
+{
+  // add hello to neighbors table
+  if (m_neighbors[ReverseLookupInt(sourceAddress)] != 1) {
+    m_neighbors[ReverseLookupInt(sourceAddress)] = 1;
+    UpdateDV();
+  }
+
+  DVMessage dvResp = DVMessage (DVMessage::HELLO_RSP, dvMessage.GetSequenceNumber(), 1, m_mainAddress);
+  dvResp.SetHelloRsp();
+  Ptr<Packet> packet = Create<Packet> ();
+  packet->AddHeader (dvResp);
+  SendPacket(packet, sourceAddress);
+}
+
+void
+DVRoutingProtocol::ProcessHelloRsp (uint32_t node)
+{
+  if (m_neighbors[node] != 1) {
+    m_neighbors[node] = 1;
+    UpdateDV();
+  }
+  std::vector<uint32_t>::iterator it;
+  if ((it = std::find(m_helloTracker.begin(), m_helloTracker.end(), node)) != m_helloTracker.end()) {
+    m_helloTracker.erase(it);
+  }
+}
+
+void
+DVRoutingProtocol::SayHelloToNeighbors() {
+  // any neighbors that haven't responded since last hello are assumed to be down;
+  // update costs & DV accordingly
+  for(int i=0; i<m_helloTracker.size(); i++){
+    m_neighbors[m_helloTracker[i]] = MAX_DISTANCE;
+  }
+  if (m_helloTracker.size() != 0) {
+    UpdateDV();
+  }
+  m_helloTracker.clear();
+
+  std::map<uint32_t, uint32_t>::iterator it;
+  for(it = m_neighbors.begin(); it != m_neighbors.end(); ++it)
+  {
+    // if cost of node is 1, then it is a live neighbor so we add it to hello_tracker
+    if (it->second == 1) {
+      m_helloTracker.push_back(it->first);
     }
+  }
+
+  Ptr<Packet> packet = Create<Packet> ();
+  DVMessage dvMessage = DVMessage (DVMessage::HELLO, 0, 1, m_mainAddress);
+  packet->AddHeader (dvMessage);
+  BroadcastPacket (packet);
+
+  m_sayHelloTimer.Schedule(m_helloTimeout);
+}
+
+void
+DVRoutingProtocol::SendDVToNeighbors() {
+  DVMessage dvAdvert = DVMessage(DVMessage::DISTANCE_VECTOR_ADVERTISEMENT, GetNextSequenceNumber(), 1, m_mainAddress);
+  dvAdvert.SetDVA(dv);
+  Ptr<Packet> packet = Create<Packet> ();
+  packet->AddHeader(dvAdvert);
+  BroadcastPacket(packet);
+}
+
+void
+DVRoutingProtocol::ProcessDV(DVMessage dvMessage, uint32_t node) {
+  // delete this neighbor's old dv
+  std::vector< std::pair<uint32_t, std::map<uint32_t, uint32_t> > >::iterator it;
+  for (it = neighbor_dvs.begin(); it != neighbor_dvs.end(); ++it) {
+    if (it->first == node) {
+      neighbor_dvs.erase(it);
+      break;
+    }
+  }
+
+  // add the neighbors new dv back into our vector
+  neighbor_dvs.push_back(std::make_pair(node, dvMessage.GetDVA().dv));
+
+  UpdateDV();
+}
+
+
+void DVRoutingProtocol::UpdateDV() {
+  bool dv_changed = false;
+
+  // for each node in the network
+  std::map<uint32_t, uint32_t>::iterator it;
+  for (it = dv.begin(); it != dv.end(); ++it) {
+    uint32_t node = it->first;
+    uint32_t old_distance = dv[node];
+    uint32_t min_distance = MAX_DISTANCE;
+
+    uint32_t next_hop;
+
+    // if node is a neighbor, set distance appropriately
+    if (m_neighbors[node] == 1) {
+      next_hop = node;
+      min_distance = 1;
+    }
+    else if (IsOwnAddress(ResolveNodeIpAddress(node))){
+      next_hop = node;
+      min_distance = 0;
+    }
+    else {
+      // default to next hop as own address (i.e. node is unreachable)
+      next_hop = ReverseLookupInt(m_mainAddress);
+
+      // find min neighbor cost + distance over all neighbors
+      std::vector<std::pair<uint32_t, std::map<uint32_t, uint32_t> > >::iterator i;
+      for (i = neighbor_dvs.begin(); i != neighbor_dvs.end(); ++i) {
+        uint32_t neighbor = i->first;
+        std::map<uint32_t, uint32_t> neighbor_dv = i->second;
+
+        if (min_distance > min(m_neighbors[neighbor] + neighbor_dv[node], min_distance)) {
+          // TODO remember the neighbor which corresponds to this condition & set it to be next hop in routing table
+          // for route to this node
+          min_distance = min(m_neighbors[neighbor] + neighbor_dv[node], min_distance);
+          next_hop = neighbor;
+        }
+      }
+    }
+
+    dv[node] = min_distance;
+
+    if (min_distance != old_distance) {
+      m_staticRouting->AddHostRouteTo(ResolveNodeIpAddress(node), ResolveNodeIpAddress(next_hop), 1);
+      routing_table[node] = next_hop;
+      dv_changed = true;
+    }
+  }
+
+  if (dv_changed) {
+    // broadcast updated DV to neighbors
+    SendDVToNeighbors();
+  }
 }
 
 bool
@@ -491,26 +666,6 @@ DVRoutingProtocol::AuditPings ()
     }
   // Rechedule timer
   m_auditPingsTimer.Schedule (m_pingTimeout); 
-}
-
-void
-DVRoutingProtocol::SayHelloToNeighbors() {
-  for(int i=0; i<m_helloTracker.size(); i++)
-  {
-    m_neighbors.erase(std::remove(m_neighbors.begin(), m_neighbors.end(), m_helloTracker[i]), m_neighbors.end());
-    m_helloTracker.clear();
-  }
-  for(int i=0; i<m_neighbors.size(); i++)
-  {
-    m_helloTracker.push_back(m_neighbors[i]);
-  }
-
-  Ptr<Packet> packet = Create<Packet> ();
-  DVMessage dvMessage = DVMessage (DVMessage::HELLO, 0, 1, m_mainAddress);
-  packet->AddHeader (dvMessage);
-  BroadcastPacket (packet);
-
-  m_sayHelloTimer.Schedule(m_helloTimeout);
 }
 
 uint32_t

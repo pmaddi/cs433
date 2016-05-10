@@ -22,6 +22,8 @@
 #include "ns3/packet.h"
 #include "ns3/object.h"
 
+#include <map>
+
 using namespace ns3;
 
 #define IPV4_ADDRESS_SIZE 4
@@ -38,7 +40,8 @@ class DVMessage : public Header
         PING_REQ = 1,
         PING_RSP = 2,
         HELLO = 3,
-        HELLO_RSP = 4,     
+        HELLO_RSP = 4,
+        DISTANCE_VECTOR_ADVERTISEMENT = 5
       };
 
     DVMessage (DVMessage::MessageType messageType, uint32_t sequenceNumber, uint8_t ttl, Ipv4Address originatorAddress);
@@ -115,6 +118,7 @@ class DVMessage : public Header
         uint32_t Deserialize (Buffer::Iterator &start);
         // Payload
         Ipv4Address destinationAddress;
+        Ipv4Address nextHop;
         std::string pingMessage;
       };
 
@@ -126,6 +130,7 @@ class DVMessage : public Header
         uint32_t Deserialize (Buffer::Iterator &start);
         // Payload
         Ipv4Address destinationAddress;
+        Ipv4Address nextHop;
         std::string pingMessage;
       };
 
@@ -147,6 +152,15 @@ class DVMessage : public Header
         std::string msg = "heyrsp";
     };
 
+    struct DistanceVectorAdvertisement {
+        void Print (std::ostream &os) const;
+        uint32_t GetSerializedSize (void) const;
+        void Serialize (Buffer::Iterator &start) const;
+        uint32_t Deserialize (Buffer::Iterator &start);
+        // Payload
+        std::map<uint32_t, uint32_t> dv;
+    };
+
   private:
     struct
       {
@@ -154,6 +168,7 @@ class DVMessage : public Header
         PingRsp pingRsp;
         Hello hello;
         HelloRSP helloRsp;
+        DistanceVectorAdvertisement dva;
       } m_message;
     
   public:
@@ -167,7 +182,8 @@ class DVMessage : public Header
      *  \param message Payload String
      */
 
-    void SetPingReq (Ipv4Address destinationAddress, std::string message);
+    void SetPingReq (Ipv4Address destinationAddress, Ipv4Address nextHop, std::string message);
+    void SetPingReqNextHop(Ipv4Address nextHop);
 
     /**
      * \returns PingRsp Struct
@@ -177,12 +193,16 @@ class DVMessage : public Header
      *  \brief Sets PingRsp message params
      *  \param message Payload String
      */
-    void SetPingRsp (Ipv4Address destinationAddress, std::string message);
+    void SetPingRsp (Ipv4Address destinationAddress, Ipv4Address nextHop, std::string message);
+    void SetPingRspNextHop(Ipv4Address nextHop);
 
     Hello GetHello ();
     void SetHello ();
     HelloRSP GetHelloRsp ();
     void SetHelloRsp ();
+
+    DistanceVectorAdvertisement GetDVA();
+    void SetDVA(std::map<uint32_t, uint32_t> local_dv);
 
 }; // class DVMessage
 

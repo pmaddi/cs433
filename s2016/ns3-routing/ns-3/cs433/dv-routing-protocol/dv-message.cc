@@ -74,6 +74,9 @@ DVMessage::GetSerializedSize (void) const
       case HELLO_RSP:
         size += m_message.helloRsp.GetSerializedSize();
         break;
+      case DISTANCE_VECTOR_ADVERTISEMENT:
+        size += m_message.dva.GetSerializedSize();
+        break;
       default:
         NS_ASSERT (false);
     }
@@ -104,6 +107,9 @@ DVMessage::Print (std::ostream &os) const
       case HELLO_RSP:
         m_message.helloRsp.Print (os);
         break;
+      case DISTANCE_VECTOR_ADVERTISEMENT:
+        m_message.dva.Print (os);
+        break;
       default:
         break;  
     }
@@ -132,6 +138,9 @@ DVMessage::Serialize (Buffer::Iterator start) const
         break;
       case HELLO_RSP:
         m_message.helloRsp.Serialize(i);
+        break;
+      case DISTANCE_VECTOR_ADVERTISEMENT:
+        m_message.dva.Serialize(i);
         break;
       default:
         NS_ASSERT (false);   
@@ -164,6 +173,9 @@ DVMessage::Deserialize (Buffer::Iterator start)
       case HELLO_RSP:
         m_message.helloRsp.Deserialize(i);
         break;
+      case DISTANCE_VECTOR_ADVERTISEMENT:
+        m_message.dva.Deserialize(i);
+        break;
       default:
         NS_ASSERT (false);
     }
@@ -176,7 +188,7 @@ uint32_t
 DVMessage::PingReq::GetSerializedSize (void) const
 {
   uint32_t size;
-  size = IPV4_ADDRESS_SIZE + sizeof(uint16_t) + pingMessage.length();
+  size = (2 * IPV4_ADDRESS_SIZE) + sizeof(uint16_t) + pingMessage.length();
   return size;
 }
 
@@ -190,6 +202,7 @@ void
 DVMessage::PingReq::Serialize (Buffer::Iterator &start) const
 {
   start.WriteHtonU32 (destinationAddress.Get ());
+  start.WriteHtonU32(nextHop.Get());
   start.WriteU16 (pingMessage.length ());
   start.Write ((uint8_t *) (const_cast<char*> (pingMessage.c_str())), pingMessage.length());
 }
@@ -198,6 +211,7 @@ uint32_t
 DVMessage::PingReq::Deserialize (Buffer::Iterator &start)
 {  
   destinationAddress = Ipv4Address (start.ReadNtohU32 ());
+  nextHop = Ipv4Address (start.ReadNtohU32 ());
   uint16_t length = start.ReadU16 ();
   char* str = (char*) malloc (length);
   start.Read ((uint8_t*)str, length);
@@ -207,7 +221,7 @@ DVMessage::PingReq::Deserialize (Buffer::Iterator &start)
 }
 
 void
-DVMessage::SetPingReq (Ipv4Address destinationAddress, std::string pingMessage)
+DVMessage::SetPingReq (Ipv4Address destinationAddress, Ipv4Address nextHop, std::string pingMessage)
 {
   if (m_messageType == 0)
     {
@@ -218,7 +232,12 @@ DVMessage::SetPingReq (Ipv4Address destinationAddress, std::string pingMessage)
       NS_ASSERT (m_messageType == PING_REQ);
     }
   m_message.pingReq.destinationAddress = destinationAddress;
+  m_message.pingReq.nextHop = nextHop;
   m_message.pingReq.pingMessage = pingMessage;
+}
+
+void DVMessage::SetPingReqNextHop(Ipv4Address nextHop) {
+  m_message.pingReq.nextHop = nextHop;
 }
 
 DVMessage::PingReq
@@ -233,7 +252,7 @@ uint32_t
 DVMessage::PingRsp::GetSerializedSize (void) const
 {
   uint32_t size;
-  size = IPV4_ADDRESS_SIZE + sizeof(uint16_t) + pingMessage.length();
+  size = (2 * IPV4_ADDRESS_SIZE) + sizeof(uint16_t) + pingMessage.length();
   return size;
 }
 
@@ -247,6 +266,7 @@ void
 DVMessage::PingRsp::Serialize (Buffer::Iterator &start) const
 {
   start.WriteHtonU32 (destinationAddress.Get ());
+  start.WriteHtonU32(nextHop.Get());
   start.WriteU16 (pingMessage.length ());
   start.Write ((uint8_t *) (const_cast<char*> (pingMessage.c_str())), pingMessage.length());
 }
@@ -255,6 +275,7 @@ uint32_t
 DVMessage::PingRsp::Deserialize (Buffer::Iterator &start)
 {  
   destinationAddress = Ipv4Address (start.ReadNtohU32 ());
+  nextHop = Ipv4Address (start.ReadNtohU32 ());
   uint16_t length = start.ReadU16 ();
   char* str = (char*) malloc (length);
   start.Read ((uint8_t*)str, length);
@@ -264,7 +285,7 @@ DVMessage::PingRsp::Deserialize (Buffer::Iterator &start)
 }
 
 void
-DVMessage::SetPingRsp (Ipv4Address destinationAddress, std::string pingMessage)
+DVMessage::SetPingRsp (Ipv4Address destinationAddress, Ipv4Address nextHop, std::string pingMessage)
 {
   if (m_messageType == 0)
     {
@@ -275,7 +296,12 @@ DVMessage::SetPingRsp (Ipv4Address destinationAddress, std::string pingMessage)
       NS_ASSERT (m_messageType == PING_RSP);
     }
   m_message.pingRsp.destinationAddress = destinationAddress;
+  m_message.pingRsp.nextHop = nextHop;
   m_message.pingRsp.pingMessage = pingMessage;
+}
+
+void DVMessage::SetPingRspNextHop(Ipv4Address nextHop) {
+  m_message.pingRsp.nextHop = nextHop;
 }
 
 DVMessage::PingRsp
@@ -388,6 +414,53 @@ DVMessage::HelloRSP
 DVMessage::GetHelloRsp ()
 {
   return m_message.helloRsp;
+}
+
+void DVMessage::DistanceVectorAdvertisement::Print (std::ostream &os) const {
+  os << "DistanceVectorAdvertisement::dv = ...\n";
+  for (std::map<uint32_t, uint32_t>::const_iterator it = dv.begin(); it != dv.end(); ++it) {
+    os << "first (node): " << it->first << " and second (distance): " << it->second;
+  }
+}
+
+uint32_t DVMessage::DistanceVectorAdvertisement::GetSerializedSize (void) const {
+  return sizeof(uint16_t) + (dv.size() * (2 * sizeof(uint32_t)));
+}
+
+void DVMessage::DistanceVectorAdvertisement::Serialize (Buffer::Iterator &start) const {
+  start.WriteU16(dv.size());
+  for (std::map<uint32_t, uint32_t>::const_iterator it = dv.begin(); it != dv.end(); ++it) {
+    start.WriteHtonU32(it->first);
+    start.WriteHtonU32(it->second);
+  }
+}
+
+uint32_t DVMessage::DistanceVectorAdvertisement::Deserialize (Buffer::Iterator &start) {
+  uint16_t length = start.ReadU16 ();
+
+  for (int i = 0; i < length; ++i) {
+    uint32_t key = start.ReadNtohU32();
+    uint32_t value = start.ReadNtohU32();
+    dv[key] = value;
+  }
+
+  return DistanceVectorAdvertisement::GetSerializedSize();
+}
+
+DVMessage::DistanceVectorAdvertisement DVMessage::GetDVA() {
+  return m_message.dva;
+}
+
+void DVMessage::SetDVA(std::map<uint32_t, uint32_t> local_dv) {
+  if (m_messageType == 0)
+    {
+      m_messageType = DISTANCE_VECTOR_ADVERTISEMENT;
+    }
+  else
+    {
+      NS_ASSERT (m_messageType == DISTANCE_VECTOR_ADVERTISEMENT);
+    }
+  m_message.dva.dv = local_dv;
 }
 
 //
