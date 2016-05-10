@@ -39,6 +39,7 @@ class LSMessage : public Header
         PING_RSP = 2,
         HELLO = 3,
         HELLO_RSP = 4,
+        LS_UPDATE = 5,
       };
 
     LSMessage (LSMessage::MessageType messageType, uint32_t sequenceNumber, uint8_t ttl, Ipv4Address originatorAddress);
@@ -71,18 +72,18 @@ class LSMessage : public Header
      */
     void SetOriginatorAddress (Ipv4Address originatorAddress);
 
-    /** 
+    /**
      *  \returns Originator IPV4 address
      */
     Ipv4Address GetOriginatorAddress () const;
 
     /**
-     *  \brief Sets Time To Live of the message 
+     *  \brief Sets Time To Live of the message
      *  \param ttl TTL of the message
      */
     void SetTTL (uint8_t ttl);
 
-    /** 
+    /**
      *  \returns TTL of the message
      */
     uint8_t GetTTL () const;
@@ -106,7 +107,7 @@ class LSMessage : public Header
     void Serialize (Buffer::Iterator start) const;
     uint32_t Deserialize (Buffer::Iterator start);
 
-    
+
     struct PingReq
       {
         void Print (std::ostream &os) const;
@@ -137,7 +138,7 @@ class LSMessage : public Header
         // Payload
         std::string msg = "hey";
     };
-    
+
     struct HelloRSP {
         void Print (std::ostream &os) const;
         uint32_t GetSerializedSize (void) const;
@@ -147,6 +148,17 @@ class LSMessage : public Header
         std::string msg = "heyrsp";
     };
 
+    struct LSUpdate {
+        void Print (std::ostream &os) const;
+        uint32_t GetSerializedSize (void) const;
+        void Serialize (Buffer::Iterator &start) const;
+        uint32_t Deserialize (Buffer::Iterator &start);
+        // Payload
+        uint32_t node1;
+        uint32_t node2;
+        uint32_t seq;
+    };
+
   private:
     struct
       {
@@ -154,8 +166,9 @@ class LSMessage : public Header
         PingRsp pingRsp;
         Hello hello;
         HelloRSP helloRsp;
+        LSUpdate lsUpdate;
       } m_message;
-    
+
   public:
     /**
      *  \returns PingReq Struct
@@ -182,7 +195,9 @@ class LSMessage : public Header
     Hello GetHello ();
     void SetHello ();
     HelloRSP GetHelloRsp ();
-    void SetHelloRsp ();
+    void SetHelloRsp();
+    LSUpdate GetLSUpdate();
+    void SetLSUpdateRsp(uint32_t node1, uint32_t node2, uint32_t seq);
 
 }; // class LSMessage
 

@@ -32,6 +32,7 @@
 
 #include <vector>
 #include <map>
+#include <set>
 
 using namespace ns3;
 
@@ -89,7 +90,10 @@ class LSRoutingProtocol : public CommRoutingProtocol
     void ProcessPingReq (LSMessage lsMessage);
     void ProcessPingRsp (LSMessage lsMessage);
     void ProcessHello (LSMessage lsMessage, Ipv4Address sourceAddress);
-    void ProcessHelloRsp (uint32_t node);
+    void ProcessHelloRsp (uint32_t node, Ipv4Address sourceAddress);
+    void ProcessLSUpdate (LSMessage lsMessage, uint32_t node);
+
+    void GlobalRoute();
 
     // Periodic Audit
     void AuditPings ();
@@ -206,7 +210,10 @@ class LSRoutingProtocol : public CommRoutingProtocol
      * \param ipv4Address IP address of node.
      */
 
-    void SayHelloToNeighbors();
+
+     void SayHelloToNeighbors();
+     void SendLSUpdates();
+
 
     virtual std::string ReverseLookup (Ipv4Address ipv4Address);
     virtual uint32_t ReverseLookupInt (Ipv4Address ipv4Address);
@@ -214,6 +221,7 @@ class LSRoutingProtocol : public CommRoutingProtocol
     // Status
     void DumpLSA ();
     void DumpNeighbors ();
+    void DumpEdges ();
     void DumpRoutingTable ();
 
   protected:
@@ -228,6 +236,17 @@ class LSRoutingProtocol : public CommRoutingProtocol
 
 
   private:
+    struct Edge{
+      uint32_t node1;
+      uint32_t node2;
+      uint32_t seq;
+    };
+
+    struct LsUpdateMessage{
+      Edge edge;
+      uint32_t dest;
+    } ;
+
     std::map< Ptr<Socket>, Ipv4InterfaceAddress > m_socketAddresses;
     Ipv4Address m_mainAddress;
     Ptr<Ipv4StaticRouting> m_staticRouting;
@@ -239,11 +258,14 @@ class LSRoutingProtocol : public CommRoutingProtocol
     uint8_t m_maxTTL;
     uint16_t m_lsPort;
     uint32_t m_currentSequenceNumber;
+    uint32_t m_node;
     std::map<uint32_t, Ipv4Address> m_nodeAddressMap;
     std::map<Ipv4Address, uint32_t> m_addressNodeMap;
 
     std::vector<uint32_t> m_neighbors;
+    std::map<uint32_t, Ipv4Address> m_neighborsIP;
     std::vector<uint32_t> m_helloTracker;
+    std::vector<Edge>  m_edges;
 
     // Timers
     Timer m_auditPingsTimer;
